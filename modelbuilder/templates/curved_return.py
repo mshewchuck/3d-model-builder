@@ -99,7 +99,7 @@ class CurvedReturnTemplate(Template):
         a flat floor on the outside of the bend and two flat side panels. It is split down the
         middle of the floor (z = zc) into two identical halves. Each half prints lying on its
         side panel: a flat plate (big footprint, windows need no bridging) with the half floor
-        rising from it as a short vertical wall. Ears with holes along the back join the halves.
+        rising from it as a short vertical wall. A slim glue bead along the back rejoins the halves.
         """
         t = v["wall"]
         ball = v["ball_diameter"]

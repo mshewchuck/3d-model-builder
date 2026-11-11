@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 
-from manifold3d import CrossSection, Manifold
+from manifold3d import CrossSection, JoinType, Manifold
 
 from .base import BuildResult, Param, Part, Template, pack_on_plate
 
@@ -31,6 +31,21 @@ RING_THICKNESS = 2.6
 RING_BAND = 8.0  # slim hoop; tabs are added only where holes are
 RING_BACK_GAP = 6.0  # ring opening starts this far in front of the floor
 TIE_HOLE_R = 1.8
+# Swivel (print-in-place): the inner ring (chute tied to it) and the outer ring (hangs from the
+# cords) print nested together. A 45 degree ridge on the inner ring runs in a groove in the outer
+# ring, so it prints without supports and comes off the plate already able to turn.
+SWIVEL_GAP = 0.45  # clearance all round the ridge as printed
+SWIVEL_LIFT = 1.0  # extra vertical room in the groove, so the ring can lift over the click bumps
+RIDGE = 1.5  # ridge depth (its faces are 45 degrees)
+RIDGE_Z0 = 1.0  # ridge starts this far above the plate
+SWIVEL_H = RIDGE_Z0 + 2 * RIDGE + SWIVEL_LIFT / 2 + SWIVEL_GAP + 1.0  # ring height at the joint
+INNER_RIM = 2.0
+OUTER_RIM = 2.0
+FLAT_T = 2.2  # thickness of the flat bands away from the joint
+BUMP_P = 0.45  # how far the click bumps stand up
+POSITIONS = 8
+BUMP_ANGLES = (0, 135, 225)  # multiples of 360/8, spread for a stable three-point seat
+CORD_ANGLES = (45, -45, 110, -110)
 
 
 def _poly(points) -> CrossSection:
@@ -68,6 +83,9 @@ class CurvedReturnTemplate(Template):
         Param("exit_length", "Spout length", 60, 0, 150,
               help="Straight run after the turn. The end of it is rounded off into the spout."),
         Param("wall", "Wall thickness", 2.0, 1.6, 5),
+        Param("swivel", "Swivel ring (1 = on, 0 = off)", 1, 0, 1, unit="",
+              help="On: the chute sits in a turning inner ring that clicks into 8 directions. "
+                   "Off: one fixed ring (lighter); turn it by sliding the hooks around the rim."),
         Param("rim_tube_diameter", "Rim tube diameter", 12, 4, 30,
               help="Thickness of the rim's metal tube. Sets the size of the hooks."),
         Param("bed_size", "Printer bed size", 256, 150, 400,
@@ -210,6 +228,92 @@ class CurvedReturnTemplate(Template):
         ring = Manifold.extrude(band, RING_THICKNESS).translate([xc, 0, 0])
         return ring, r_in, r_out
 
+    # ----------------------------------------------------------------- swivel
+    def _swivel(self, v, geo, chute_inst):
+        """Nested print-in-place swivel ring, in the installed frame (bottom at the chute top)."""
+        r_in = v["ring_opening"] / 2
+        t = geo["t"]
+        z0 = v["lead_in"]
+        xc = -geo["rf"] + r_in + RING_BACK_GAP
+
+        ties = []
+        for (pr, pz), (nr, nz) in geo["ties"].values():
+            X, Y = -pr - xc, -(pz - geo["zc"])
+            nX, nY = -nr, -nz
+            off = t / 2 + 2.6
+            ties.append([(X + nX * off, Y + nY * off), (X - nX * off, Y - nY * off)])
+        tie_r = max(math.hypot(*q) for pair in ties for q in pair)
+
+        # Inner ring: flat band + tie tabs, with a taller rim carrying the ridge on its outside.
+        ri = max(r_in + 8, tie_r + TIE_HOLE_R + 2.6 + INNER_RIM)  # outside of the inner rim
+        flat = CrossSection.circle(ri, SEG) - CrossSection.circle(max(r_in, ri - 6), SEG)
+        for pair in ties:
+            ang = math.atan2(sum(q[1] for q in pair), sum(q[0] for q in pair))
+            anchor = ((ri - 3) * math.cos(ang), (ri - 3) * math.sin(ang))
+            flat = flat + CrossSection.batch_hull(
+                [CrossSection.circle(TIE_HOLE_R + 2.6, 24).translate(list(q)) for q in pair + [anchor]]
+            )
+        flat = flat ^ CrossSection.circle(ri, SEG)
+        for pair in ties:
+            for q in pair:
+                flat = flat - CrossSection.circle(TIE_HOLE_R, 16).translate(list(q))
+        inner = Manifold.extrude(flat, FLAT_T)
+        rim_prof = _poly([(ri - INNER_RIM, 0), (ri, 0), (ri, SWIVEL_H), (ri - INNER_RIM, SWIVEL_H)])
+        z1 = RIDGE_Z0 + SWIVEL_LIFT / 2 + SWIVEL_GAP  # ridge sits mid-groove as printed
+        ridge = _poly([(ri - 0.5, z1), (ri + RIDGE, z1 + RIDGE), (ri - 0.5, z1 + 2 * RIDGE + 0.5)])
+        inner = inner + Manifold.revolve(rim_prof + ridge, SEG)
+
+        # Outer ring: rim with a matching groove (ridge grown by the gap, stretched by the lift).
+        ro_in = ri + SWIVEL_GAP
+        ro_out = ri + RIDGE + SWIVEL_GAP + OUTER_RIM
+        groove = CrossSection.batch_hull([
+            ridge.offset(SWIVEL_GAP, JoinType.Miter).translate([0, -SWIVEL_LIFT / 2]),
+            ridge.offset(SWIVEL_GAP, JoinType.Miter).translate([0, SWIVEL_LIFT / 2]),
+        ])
+        outer_prof = _poly([(ro_in, 0), (ro_out, 0), (ro_out, SWIVEL_H), (ro_in, SWIVEL_H)]) - groove
+        outer = Manifold.revolve(outer_prof, SEG)
+
+        # Clicks: bumps on the groove's lower face, dimples in the ridge's lower face.
+        n = (1 / math.sqrt(2), -1 / math.sqrt(2))  # outward-down normal of the ridge's lower face
+        mid = (ri + RIDGE / 2, z1 + RIDGE / 2)
+        face_gap = SWIVEL_GAP + (SWIVEL_LIFT / 2) / math.sqrt(2)
+        groove_mid = (mid[0] + n[0] * face_gap, mid[1] + n[1] * face_gap)
+        br = 1.0
+        bump_c = (groove_mid[0] + n[0] * (br - BUMP_P), groove_mid[1] + n[1] * (br - BUMP_P))
+        dimple_c = (mid[0] + n[0] * (1.3 - BUMP_P - 0.15), mid[1] + n[1] * (1.3 - BUMP_P - 0.15))
+        for ang in BUMP_ANGLES:
+            a = math.radians(ang)
+            outer = outer + Manifold.sphere(br, 16).translate(
+                [bump_c[0] * math.cos(a), bump_c[0] * math.sin(a), bump_c[1]])
+        # As the ring settles it slides down the 45 degree face, so the dimple is stretched up the
+        # slope to keep catching the bump.
+        u = (1 / math.sqrt(2), 1 / math.sqrt(2))
+        d2 = (dimple_c[0] + u[0] * 1.1, dimple_c[1] + u[1] * 1.1)
+        for i in range(POSITIONS):
+            a = math.radians(i * 360 / POSITIONS)
+            c, sn = math.cos(a), math.sin(a)
+            dimple = Manifold.batch_hull([
+                Manifold.sphere(1.3, 16).translate([dimple_c[0] * c, dimple_c[0] * sn, dimple_c[1]]),
+                Manifold.sphere(1.3, 16).translate([d2[0] * c, d2[0] * sn, d2[1]]),
+            ])
+            inner = inner - dimple
+
+        # Cord bosses on the outside of the outer ring.
+        r_cord = ro_out + 3.0
+        bosses, holes, cords = CrossSection(), CrossSection(), []
+        for ang in CORD_ANGLES:
+            q = (r_cord * math.cos(math.radians(ang)), r_cord * math.sin(math.radians(ang)))
+            cords.append(q)
+            bosses = bosses + CrossSection.circle(5.5, 32).translate(list(q))
+            holes = holes + CrossSection.circle(2.5, 20).translate(list(q))
+        outer = outer + Manifold.extrude(bosses - CrossSection.circle(ro_out - 0.5, SEG), FLAT_T)
+        outer = outer - Manifold.extrude(holes, SWIVEL_H + 2).translate([0, 0, -1])
+
+        inner = inner.translate([xc, 0, z0])
+        outer = outer.translate([xc, 0, z0])
+        cord_pts = [(xc + x, y) for x, y in cords]
+        return inner, outer, cord_pts, z0 + FLAT_T
+
     # ------------------------------------------------------------------- hook
     @staticmethod
     def _hook(v) -> Manifold:
@@ -231,31 +335,38 @@ class CurvedReturnTemplate(Template):
     # ------------------------------------------------------------------ build
     def build(self, v: dict[str, float]) -> BuildResult:
         chute, geo = self._chute(v)
-        ring, r_in, r_out = self._ring(v, geo)
         hook = self._hook(v)
-
         chute_inst = self._to_installed(chute, geo["zc"])
-        ring_inst = ring.translate([0, 0, v["lead_in"]])
-        assembled = [
-            Part("Chute", chute_inst, CHUTE_COLOR),
-            Part("Ring", ring_inst, RING_COLOR),
-        ]
+        assembled = [Part("Chute", chute_inst, CHUTE_COLOR)]
+        if v["swivel"] >= 0.5:
+            inner_ring, outer_ring, cord_pts, cord_z = self._swivel(v, geo, chute_inst)
+            rings = [Part("Swivel ring (print-in-place)", inner_ring + outer_ring, RING_COLOR)]
+            assembled += [Part("Inner ring (turns)", inner_ring, "#f7dc6f"),
+                          Part("Outer ring (hangs)", outer_ring, RING_COLOR)]
+        else:
+            ring, r_in, r_out = self._ring(v, geo)
+            ring_inst = ring.translate([0, 0, v["lead_in"]])
+            rings = [Part("Ring", ring_inst, RING_COLOR)]
+            xc = -geo["rf"] + v["ring_opening"] / 2 + RING_BACK_GAP
+            r_c = (r_in + r_out) / 2
+            cord_pts = [(xc + r_c * math.cos(math.radians(a)), r_c * math.sin(math.radians(a)))
+                        for a in CORD_ANGLES]
+            cord_z = v["lead_in"] + RING_THICKNESS
+        if v["swivel"] < 0.5:
+            assembled += rings
         # Preview only: cords up to the hooks (not exported).
-        xc = -geo["rf"] + v["ring_opening"] / 2 + RING_BACK_GAP
-        r_c = (r_in + r_out) / 2
         cord_len = 110.0
         b = hook.bounding_box()
         hook_up = hook.translate([-(b[0] + b[3]) / 2, -b[1], -2.0]).rotate([90, 0, 0])
-        for ang in (45, -45, 110, -110):
-            cx, cy = xc + r_c * math.cos(math.radians(ang)), r_c * math.sin(math.radians(ang))
-            z0 = v["lead_in"] + RING_THICKNESS
+        for (cx, cy), ang in zip(cord_pts, CORD_ANGLES):
+            z0 = cord_z
             cord = Manifold.cylinder(cord_len, 1.5, circular_segments=8).translate([cx, cy, z0])
             assembled.append(Part("Cord", cord, "#888888"))
             hk = hook_up.rotate([0, 0, ang + 90]).translate([cx, cy, z0 + cord_len - 6])
             assembled.append(Part("Hook", hk, HOOK_COLOR))
 
         bed = v["bed_size"]
-        others = [Part("Ring", ring, RING_COLOR)] + [
+        others = list(rings) + [
             Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)
         ]
         # Spin the chute flat on the plate until everything packs onto one plate.
@@ -270,7 +381,7 @@ class CurvedReturnTemplate(Template):
         if not one_plate:
             notes.append("Not everything fits on one plate: parts that did not fit are placed to the "
                          "right of the plate. In Bambu Studio press A (Arrange) to move them to plate 2.")
-        for p in print_parts[:2]:
+        for p in print_parts[: 1 + len(rings)]:
             sx, sy, sz = p.size()
             if max(sx, sy) > bed or sz > bed:
                 notes.append(f"Warning: the {p.name.lower()} is {sx:.0f} x {sy:.0f} x {sz:.0f} mm, "
@@ -280,9 +391,23 @@ class CurvedReturnTemplate(Template):
             "plate): walls are vertical or 45 degrees and slots bridge 10 mm at most. Its lower lip "
             "edge is all that touches the plate, so set Brim to Outer only (about 5 mm). PETG or PLA."
         )
+        tied_to = "inner ring" if v["swivel"] >= 0.5 else "ring"
         notes.append(
-            "Assembly: set the ring on top of the chute and fasten it with 3 small zip ties through "
-            "the matching holes. Tie 4 cords (about 20-30 cm) from the ring's cord holes to the hook "
-            "eyelets and hang the hooks on the rim so the ring sits just under the net."
+            f"Chute to ring: the chute's top end sits flat against the underside of the {tied_to}. "
+            "3 small zip ties (2.5-3.6 mm wide) lock it on: one at the back wall and one at each side "
+            "lip. Each tie goes down through a ring hole, through the slot in the chute wall, and back "
+            "up through the ring hole on the other side of the wall. Pull it tight and trim it."
+        )
+        if v["swivel"] >= 0.5:
+            notes.append(
+                "Swivel ring: prints as ONE part with the inner ring nested inside the outer ring "
+                "(0.45 mm gap). After printing, twist it firmly once to break it free. To aim the "
+                "chute, lift it slightly, turn it, and let it settle into the next click. There are "
+                "8 positions, 45 degrees apart. Print it at 0.2 mm layers or finer. Don't scale it in "
+                "the slicer, because that changes the gap."
+            )
+        notes.append(
+            "Hanging: tie 4 cords (about 20-30 cm) from the cord holes to the hook eyelets and hang "
+            "the hooks on the rim so the ring sits just under the net."
         )
         return BuildResult(assembled, print_parts, notes)

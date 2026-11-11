@@ -20,10 +20,53 @@ def result(tmpl):
 
 def test_parts_are_single_solids(result):
     names = [p.name for p in result.print_parts]
-    assert names.count("Chute") == 1 and names.count("Ring") == 1
+    assert names.count("Chute") == 1
+    assert sum(n.startswith("Swivel ring") for n in names) == 1
     assert sum(n.startswith("Hook") for n in names) == 4
     for p in result.print_parts:
-        assert len(p.solid.decompose()) == 1, p.name
+        # The print-in-place swivel is two interlocked, separate pieces by design.
+        expected = 2 if p.name.startswith("Swivel") else 1
+        assert len(p.solid.decompose()) == expected, p.name
+
+
+def test_fixed_ring_option(tmpl):
+    r = tmpl.build(tmpl.defaults() | {"swivel": 0})
+    names = [p.name for p in r.print_parts]
+    assert "Ring" in names
+    assert all(len(p.solid.decompose()) == 1 for p in r.print_parts)
+
+
+def _swivel_parts(tmpl):
+    v = tmpl.defaults()
+    r = tmpl.build(v)
+    a = {p.name: p.solid for p in r.assembled}
+    xc = -v["bend_radius"] + v["ring_opening"] / 2 + 6
+    return a["Inner ring (turns)"], a["Outer ring (hangs)"], xc
+
+
+def _collides(a, b):
+    return (a ^ b).volume() > 1e-6
+
+
+def test_swivel_prints_with_clearance_and_cannot_fall_out(tmpl):
+    inner, outer, _ = _swivel_parts(tmpl)
+    assert inner.min_gap(outer, 5) >= 0.44  # print-in-place gap
+    assert not _collides(inner.translate([0, 0, 1.0]), outer)  # lifts to clear the clicks
+    assert _collides(inner.translate([0, 0, 1.5]), outer)  # but is captured
+    assert _collides(inner.translate([0, 0, -1.5]), outer)
+
+
+def test_swivel_clicks_into_positions(tmpl):
+    inner, outer, xc = _swivel_parts(tmpl)
+
+    def drop(m):
+        d = 0.0
+        while d < 3 and not _collides(m.translate([0, 0, -(d + 0.02)]), outer):
+            d += 0.02
+        return d
+
+    between = inner.translate([-xc, 0, 0]).rotate([0, 0, 22.5]).translate([xc, 0, 0])
+    assert drop(inner) - drop(between) >= 0.3  # settles noticeably deeper at a click
 
 
 def test_defaults_fit_one_bambu_plate_without_overlap(result):
@@ -59,7 +102,8 @@ def test_small_bed_overflows_to_second_plate(tmpl):
 @pytest.mark.parametrize("ball", [45, 67, 100])
 def test_ball_sizes_build(tmpl, ball, tmp_path):
     r = tmpl.build(tmpl.defaults() | {"ball_diameter": ball})
-    assert all(len(p.solid.decompose()) == 1 for p in r.print_parts)
+    for p in r.print_parts:
+        assert len(p.solid.decompose()) == (2 if p.name.startswith("Swivel") else 1), p.name
     write_3mf(str(tmp_path / "x.3mf"), [p.to_mesh() for p in r.print_parts])
 
 

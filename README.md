@@ -14,10 +14,10 @@ windows, and comes back out toward you. It's sized for an 80 mm mini airless bal
 | Part | Qty | How it prints |
 |------|-----|---------------|
 | Chute: a curved trough (70° bend by default) with a flat floor, 45° lips, slots in the floor and lips, and a rounded spout | 1 | Lying on its side. No supports, Brim set to Outer only |
-| Ring: a slim 8 mm hoop with tabs only at the cord and zip-tie holes | 1 | Flat |
+| Swivel ring: an inner ring (the chute ties to it) nested in an outer ring (it hangs from the cords), clicking into 8 directions | 1 (print-in-place) | Flat, as one part. Twist once after printing to free it |
 | Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-All six parts fit on one 256 mm Bambu plate and use about 62 cm³ of plastic.
+All six parts fit on one 256 mm Bambu plate and use about 72 cm³ of plastic (about 62 cm³ with the fixed ring, `swivel=0`).
 
 ### Printing without supports
 
@@ -32,8 +32,16 @@ lip touching the plate.
 - Only the thin lip edge touches the plate, so set **Brim** to *Outer only* (about 5 mm)
   in Bambu Studio for grip. Turn supports **off**.
 
-**Assembly:** set the ring on top of the chute and fasten it with 3 small zip ties through
-the matching holes. Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the
+**Chute to ring:** the chute's top end sits flat against the underside of the inner ring.
+Three small zip ties lock it on: one at the back wall and one at each side lip. Each tie goes
+down through a ring hole, through the slot in the chute wall, and back up through the ring
+hole on the other side of the wall.
+
+**Aiming:** the inner ring turns inside the outer ring on a 45° ridge-and-groove joint.
+To change direction, lift the chute about 1 mm, turn it, and let it settle into the next
+click. There are 8 positions, 45° apart.
+
+**Hanging:** Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the
 hooks on the rim so the ring sits just under the net.
 
 ## Template: Simple flat tray

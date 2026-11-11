@@ -69,7 +69,9 @@ def _steep_overhangs(solid):
     m = Part("x", solid).to_mesh()
     tris = m.vertices[m.triangles]
     n = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
-    n = n / np.linalg.norm(n, axis=1, keepdims=True)
+    length = np.linalg.norm(n, axis=1, keepdims=True)
+    keep = length[:, 0] > 1e-9  # skip zero-area slivers
+    tris, n = tris[keep], n[keep] / length[keep]
     # Faces pointing down steeper than 45 degrees that are not resting on the plate.
     return tris[(n[:, 2] < -0.71) & (tris[:, :, 2].min(axis=1) > 0.2)]
 

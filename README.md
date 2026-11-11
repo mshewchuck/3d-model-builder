@@ -13,11 +13,11 @@ windows, and comes back out toward you. It's sized for an 80 mm mini airless bal
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute: a curved trough (70° bend by default) with a flat floor, 45° lips, and slots in the floor and lips | 1 | Lying on its side. No supports, Brim set to Outer only |
-| Ring: a flat catch collar with cord holes and zip-tie holes | 1 | Flat |
+| Chute: a curved trough (70° bend by default) with a flat floor, 45° lips, slots in the floor and lips, and a rounded spout | 1 | Lying on its side. No supports, Brim set to Outer only |
+| Ring: a slim 8 mm hoop with tabs only at the cord and zip-tie holes | 1 | Flat |
 | Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-All six parts fit on one 256 mm Bambu plate and use about 84 cm³ of plastic.
+All six parts fit on one 256 mm Bambu plate and use about 62 cm³ of plastic.
 
 ### Printing without supports
 

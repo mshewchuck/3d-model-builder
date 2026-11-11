@@ -27,7 +27,8 @@ SEG = 96
 CHUTE_COLOR = "#5b5f66"
 RING_COLOR = "#f2c811"
 HOOK_COLOR = "#2b2b2b"
-RING_THICKNESS = 3.0
+RING_THICKNESS = 2.6
+RING_BAND = 8.0  # slim hoop; tabs are added only where holes are
 RING_BACK_GAP = 6.0  # ring opening starts this far in front of the floor
 TIE_HOLE_R = 1.8
 
@@ -64,9 +65,9 @@ class CurvedReturnTemplate(Template):
         Param("bend_angle", "Bend angle", 70, 30, 90, unit="deg",
               help="How far the chute turns from straight down. 70 means the exit slopes 20 degrees downhill toward you."),
         Param("lead_in", "Straight section at top", 25, 10, 100),
-        Param("exit_length", "Straight exit length", 50, 0, 150,
-              help="Flat run after the turn that points the ball back at you."),
-        Param("wall", "Wall thickness", 2.4, 1.6, 5),
+        Param("exit_length", "Spout length", 60, 0, 150,
+              help="Straight run after the turn. The end of it is rounded off into the spout."),
+        Param("wall", "Wall thickness", 2.0, 1.6, 5),
         Param("rim_tube_diameter", "Rim tube diameter", 12, 4, 30,
               help="Thickness of the rim's metal tube. Sets the size of the hooks."),
         Param("bed_size", "Printer bed size", 256, 150, 400,
@@ -103,13 +104,21 @@ class CurvedReturnTemplate(Template):
         exit_len = v["exit_length"]
         if exit_len > 0:
             ext = Manifold.extrude(profile, exit_len + 0.5)  # 0.5 mm overlap fuses it to the bend
+            # Rounded spout: in this local frame the spout end is at w = 0. The lips curve down to
+            # the floor along a quarter circle. The cut surface is vertical while printing, so it
+            # adds no overhang.
+            rc = min(d + t, exit_len)
+            keep = Manifold.cube([rf + t + 10, height + 4, exit_len + 1]).translate([0, -2, rc])
+            keep = keep + Manifold.cylinder(height + 4, rc, circular_segments=SEG).rotate(
+                [-90, 0, 0]).translate([rf + t, -2, rc])
+            ext = ext ^ keep
             chute = chute + self._exit(ext, exit_len, angle)
 
         # Floor slots across the path (8 mm wide, so the ball rolls straight over them).
-        m = 7.0
+        m = 5.0
         floor_cut = _poly([(rf - 1, a + m), (rf + t + 1, a + m), (rf + t + 1, top - m), (rf - 1, top - m)])
-        slot_deg = math.degrees(8.0 / rf)
-        pitch_deg = math.degrees(18.0 / rf)
+        slot_deg = math.degrees(10.0 / rf)
+        pitch_deg = math.degrees(16.0 / rf)
         n = max(0, int((angle - 2 * pitch_deg) // pitch_deg) + 1)
         start = (angle - (n - 1) * pitch_deg - slot_deg) / 2
         slot = Manifold.revolve(floor_cut, 8, slot_deg)
@@ -117,25 +126,26 @@ class CurvedReturnTemplate(Template):
             chute = chute - slot.rotate([0, 0, start + i * pitch_deg])
 
         # Slots in the lips (the open-frame look). 10 mm wide, so the print only bridges 10 mm.
-        m2 = 7.0
+        m2 = 5.0
         lip_cut = _poly([(rf - d + m2, -1), (rf - m2, -1), (rf - m2, a), (rf - d + m2, a)]) + _poly(
             [(rf - d + m2, top), (rf - m2, top), (rf - m2, height + 1), (rf - d + m2, height + 1)]
         )
         r_mid = rf - d / 2
         win_deg = math.degrees(10.0 / r_mid)
-        wpitch = math.degrees(20.0 / r_mid)
+        wpitch = math.degrees(16.0 / r_mid)
         nw = max(1, int((angle - 2 * wpitch) // wpitch) + 1)
         wstart = (angle - (nw - 1) * wpitch - win_deg) / 2
         window = Manifold.revolve(lip_cut, 8, win_deg)
         for i in range(nw):
             chute = chute - window.rotate([0, 0, wstart + i * wpitch])
-        # Matching slots along the straight exit (lips and floor).
-        cut = lip_cut + floor_cut
-        pos = 10.0
+        # Matching slots along the straight exit. Lip slots stop where the rounded spout begins.
+        rounded_from = exit_len - min(d + t, exit_len)
+        pos = 6.0
         while pos + 10 <= exit_len - 8:
+            cut = floor_cut + lip_cut if pos + 10 <= rounded_from - 3 else floor_cut
             piece = Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)])
             chute = chute - self._exit(piece, 0, angle)
-            pos += 20.0
+            pos += 16.0
 
         # Zip-tie holes near the top of the lead-in: one through the floor, one through each lip.
         y_tie = -(v["lead_in"] - 6)
@@ -170,32 +180,34 @@ class CurvedReturnTemplate(Template):
     # ------------------------------------------------------------------- ring
     def _ring(self, v, geo):
         r_in = v["ring_opening"] / 2
+        r_out = r_in + RING_BAND
+        r_mid = (r_in + r_out) / 2
         t = geo["t"]
         # Installed frame: floor inner face sits at X = -rf; ring centre is in front of it.
         xc = -geo["rf"] + r_in + RING_BACK_GAP
-        holes = []  # (X, Y) pairs of zip-tie holes either side of each wall
+        band = CrossSection.circle(r_out, SEG) - CrossSection.circle(r_in, SEG)
+        tie_holes = []
         for (pr, pz), (nr, nz) in geo["ties"].values():
-            X, Y = -pr, -(pz - geo["zc"])
+            X, Y = -pr - xc, -(pz - geo["zc"])  # relative to ring centre
             nX, nY = -nr, -nz
             off = t / 2 + 2.6
-            holes += [(X + nX * off, Y + nY * off), (X - nX * off, Y - nY * off)]
-        dists = [math.hypot(x - xc, y) for x, y in holes]
-        r_out = max(r_in + 14, max(dists) + 5)
-        if min(dists) - TIE_HOLE_R < r_in + 1:
-            r_in = min(dists) - TIE_HOLE_R - 1.5  # keep tie holes inside the band
-        ring = Manifold.cylinder(RING_THICKNESS, r_out, circular_segments=SEG) - Manifold.cylinder(
-            RING_THICKNESS + 2, r_in, circular_segments=SEG
-        ).translate([0, 0, -1])
-        ring = ring.translate([xc, 0, 0])
-        for x, y in holes:
-            ring = ring - Manifold.cylinder(RING_THICKNESS + 2, TIE_HOLE_R, circular_segments=16).translate(
-                [x, y, -1]
+            pair = [(X + nX * off, Y + nY * off), (X - nX * off, Y - nY * off)]
+            tie_holes += pair
+            ang = math.atan2(Y, X)
+            anchor = (r_mid * math.cos(ang), r_mid * math.sin(ang))
+            band = band + CrossSection.batch_hull(
+                [CrossSection.circle(TIE_HOLE_R + 2.6, 24).translate(list(q)) for q in pair + [anchor]]
             )
-        r_cord = (r_in + r_out) / 2
+        cord_pts = []
         for ang in (45, -45, 110, -110):
-            cx = xc + r_cord * math.cos(math.radians(ang))
-            cy = r_cord * math.sin(math.radians(ang))
-            ring = ring - Manifold.cylinder(RING_THICKNESS + 2, 2.5, circular_segments=20).translate([cx, cy, -1])
+            q = (r_mid * math.cos(math.radians(ang)), r_mid * math.sin(math.radians(ang)))
+            cord_pts.append(q)
+            band = band + CrossSection.circle(5.5, 32).translate(list(q))
+        for q in tie_holes:
+            band = band - CrossSection.circle(TIE_HOLE_R, 16).translate(list(q))
+        for q in cord_pts:
+            band = band - CrossSection.circle(2.5, 20).translate(list(q))
+        ring = Manifold.extrude(band, RING_THICKNESS).translate([xc, 0, 0])
         return ring, r_in, r_out
 
     # ------------------------------------------------------------------- hook

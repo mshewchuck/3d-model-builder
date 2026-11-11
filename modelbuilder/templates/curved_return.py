@@ -76,6 +76,9 @@ class CurvedReturnTemplate(Template):
         Param("exit_length", "Spout length", 35, 0, 150,
               help="Straight run after the turn. The end of it is rounded off into the spout."),
         Param("wall", "Wall thickness", 2.0, 1.6, 5),
+        Param("bevel", "Corner bevel", 15, 0, 30,
+              help="Each corner between the floor and a side is two 45 degree bends instead of one "
+                   "sharp 90. This is the width of the angled part. 0 gives square corners."),
         Param("block_width", "Rim block width", 57.2, 20, 150,
               help="Side to side, along the backboard (2.25 in = 57.2 mm)."),
         Param("block_depth", "Rim block depth", 25.4, 5, 80,
@@ -116,7 +119,16 @@ class CurvedReturnTemplate(Template):
         lead_len = v["lead_in"]
         exit_len = v["exit_length"]
 
-        profile = _poly([(rf - depth, 0), (rf + t, 0), (rf + t, zc), (rf, zc), (rf, t), (rf - depth, t)])
+        # Beveled corner: floor -> 45 degree wall -> side panel. As printed (side panel on the plate)
+        # the bevel's underside is exactly a 45 degree overhang.
+        c = min(v.get("bevel", 0.0), zc - t - 12, depth - 12)
+        if c > 0.5:
+            s2 = t * math.sqrt(2)
+            profile = _poly([(rf - depth, 0), (rf - c - t + s2, 0), (rf + t, c + 2 * t - s2), (rf + t, zc),
+                             (rf, zc), (rf, t + c), (rf - c, t), (rf - depth, t)])
+        else:
+            c = 0.0
+            profile = _poly([(rf - depth, 0), (rf + t, 0), (rf + t, zc), (rf, zc), (rf, t), (rf - depth, t)])
 
         def along_lead(m):  # extrusion local w in [0, L] -> runs along -Y from the bend start
             return m.transform([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]])
@@ -192,12 +204,12 @@ class CurvedReturnTemplate(Template):
         for i in range(nw):
             a_mid = w0 + i * pitch + win_deg / 2
             d = depth_at(rf * math.radians(a_mid + win_deg / 2))  # shallowest end of this window
-            win_i = _poly([(rf - d + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - d + mw, t + 1)])
+            win_i = _poly([(rf - d + mw, -1), (rf - c - mw, -1), (rf - c - mw, t + 1), (rf - d + mw, t + 1)])
             half = half - Manifold.revolve(win_i, 8, win_deg).rotate([0, 0, w0 + i * pitch])
 
         # Floor slots across the path. As printed the floor is a vertical wall, so each slot's
         # top is a 10 mm bridge. A 4 mm strip is left along the seam.
-        floor_cut = _poly([(rf - 1, t + 4), (rf + t + 1, t + 4), (rf + t + 1, zc - 4), (rf - 1, zc - 4)])
+        floor_cut = _poly([(rf - 1, t + c + 4), (rf + t + 1, t + c + 4), (rf + t + 1, zc - 4), (rf - 1, zc - 4)])
         slot_deg, fpitch = math.degrees(10.0 / rf), math.degrees(16.0 / rf)
         n = max(0, int((angle - 2 * fpitch) // fpitch) + 1)
         start = (angle - (n - 1) * fpitch - slot_deg) / 2
@@ -208,7 +220,7 @@ class CurvedReturnTemplate(Template):
         pos = 6.0
         while exit_len > 0 and pos + 10 <= exit_len - 8:
             d = depth_at(arc + pos + 10)
-            win = _poly([(rf - d + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - d + mw, t + 1)])
+            win = _poly([(rf - d + mw, -1), (rf - c - mw, -1), (rf - c - mw, t + 1), (rf - d + mw, t + 1)])
             cut = floor_cut + win if pos + 10 <= rounded_from - 3 else floor_cut
             half = half - self._exit(Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)]), 0, angle)
             pos += 16.0

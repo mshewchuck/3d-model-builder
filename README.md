@@ -9,7 +9,7 @@ Pick a template, type your dimensions, check the 3D preview, click **Export .3mf
 
 This one is styled after store-bought hoop returns. A catch ring hangs from the rim on
 4 cords. The ball drops through the net into the ring, rolls down a curved trough with
-windows, and comes back out toward you. It's sized for a 67 mm mini airless ball by default.
+windows, and comes back out toward you. It's sized for an 80 mm mini airless ball by default.
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
@@ -17,7 +17,7 @@ windows, and comes back out toward you. It's sized for a 67 mm mini airless ball
 | Ring: a flat catch collar with cord holes and zip-tie holes | 1 | Flat |
 | Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-All six parts fit on one 256 mm Bambu plate and use about 70 cm³ of plastic.
+All six parts fit on one 256 mm Bambu plate and use about 84 cm³ of plastic.
 
 ### Printing without supports
 
@@ -54,7 +54,7 @@ Command-line use (no window):
 
 ```bash
 python -m modelbuilder --cli --list
-python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=67 ring_opening=90
+python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=80 ring_opening=110
 ```
 
 ### Prebuilt app

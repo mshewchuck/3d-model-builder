@@ -55,11 +55,11 @@ class CurvedReturnTemplate(Template):
         "turns the ball and sends it back to you. Every part prints without supports."
     )
     params = [
-        Param("ball_diameter", "Ball diameter", 67, 40, 130,
-              help="Mini airless / tennis-ball size is about 65-70 mm."),
-        Param("ring_opening", "Ring opening", 95, 60, 200,
+        Param("ball_diameter", "Ball diameter", 80, 40, 130,
+              help="Default fits an 80 mm mini airless ball. Measure yours."),
+        Param("ring_opening", "Ring opening", 110, 60, 200,
               help="Inside diameter of the catch ring. A bit bigger than the bottom of your net."),
-        Param("bend_radius", "Bend radius", 90, 50, 200,
+        Param("bend_radius", "Bend radius", 100, 50, 200,
               help="Radius of the chute's floor through the turn. Bigger turns more smoothly but is bigger to print."),
         Param("bend_angle", "Bend angle", 70, 30, 90, unit="deg",
               help="How far the chute turns from straight down. 70 means the exit slopes 20 degrees downhill toward you."),

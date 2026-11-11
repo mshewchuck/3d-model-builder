@@ -62,13 +62,13 @@ def test_light(result):
 
 def test_ball_fits_channel(tmpl):
     v = tmpl.defaults()
-    _, _, geo = tmpl._chute(v)
+    _, _, geo = tmpl._chute(v | {"bend_radius": 70})
     assert geo["w_in"] > v["ball_diameter"] + 4
     assert geo["depth"] > v["ball_diameter"] / 2
 
 
 def test_halves_print_flat_and_short(tmpl):
-    half, full, _ = tmpl._chute(tmpl.defaults())
+    half, full, _ = tmpl._chute(tmpl.defaults() | {"bend_radius": 100})
     b = half.bounding_box()
     assert b[2] == pytest.approx(0, abs=1e-6)
     assert b[5] - b[2] < 60
@@ -92,8 +92,11 @@ def test_prints_without_supports(tmpl, angle):
     for p in r.print_parts:
         bad = _steep_overhangs(p.solid)
         if len(bad):
-            extent = (bad[:, :, :2].max(axis=1) - bad[:, :, :2].min(axis=1)).max()
-            assert extent <= 10.5, f"{p.name}: {extent:.1f} mm unsupported span"
+            # A slicer bridges each flat overhang across its short side, so the bridge length is
+            # the smaller of each face's two extents. Allow up to about 10 mm.
+            ext = bad[:, :, :2].max(axis=1) - bad[:, :, :2].min(axis=1)
+            span = ext.min(axis=1).max()
+            assert span <= 10.5, f"{p.name}: {span:.1f} mm unsupported bridge"
 
 
 @pytest.mark.parametrize("angle", [30, 60, 90])
@@ -109,27 +112,34 @@ def test_ball_sizes_build(tmpl, ball, tmp_path):
     write_3mf(str(tmp_path / "x.3mf"), [p.to_mesh() for p in r.print_parts])
 
 
-def test_hanger_caps_block_and_clamps_chute(result):
+def test_hanger_caps_block_and_meets_chute(tmpl, result):
+    v = tmpl.defaults()
     a = _assembled(result)
     hanger, block, chute = a["Hanger"], a["Rim block"], a["Chute"]
     assert (hanger ^ block).volume() == pytest.approx(0, abs=1e-6)
     assert hanger.min_gap(block, 2) == pytest.approx(0.4, abs=0.05)  # snug cap
     assert (hanger ^ chute).volume() == pytest.approx(0, abs=1e-3)
-    assert hanger.min_gap(chute, 2) == pytest.approx(0.3, abs=0.05)  # cheeks hug the side panels
+    assert hanger.min_gap(chute, 1) < 0.01  # block sits flat on the back of the chute
+    # The chute floor stands off the backboard by the set gap (its joining ears, 6 mm deep,
+    # sit a little closer) and nothing touches the board except the hanger.
+    board_x = a["Backboard"].bounding_box()[3]
+    x_floor = -(tmpl.auto_bend_radius(v) + v["wall"])
+    assert x_floor - board_x == pytest.approx(v["standoff"], abs=0.01)
+    assert chute.bounding_box()[0] - board_x > v["standoff"] - 6.5
 
 
-def test_side_screws_pass_through_cheeks_and_panels(tmpl, result):
+def test_screws_go_through_chute_into_block(tmpl, result):
     v = tmpl.defaults()
     a = _assembled(result)
-    x_floor = -(v["bend_radius"] + v["wall"])
-    z = v["lead_in"] - 12
-    for dx in (8, 19, 30):
-        rod = Manifold.cylinder(160, 1.2, circular_segments=12).rotate([90, 0, 0]).translate([x_floor + dx, 80, z])
-        assert (rod ^ a["Hanger"]).volume() == pytest.approx(0, abs=1e-6)
-        assert (rod ^ a["Chute"]).volume() == pytest.approx(0, abs=1e-6)
-        # ...and each screw really does pass through both a cheek and a side panel
-        fat = Manifold.cylinder(160, 2.5, circular_segments=12).rotate([90, 0, 0]).translate([x_floor + dx, 80, z])
-        assert (fat ^ a["Hanger"]).volume() > 0 and (fat ^ a["Chute"]).volume() > 0
+    x_floor = -(tmpl.auto_bend_radius(v) + v["wall"])
+    for y in (18, -18):
+        for d in (6, 18):
+            z = v["lead_in"] - d
+            rod = Manifold.cylinder(14, 1.2, circular_segments=12).rotate([0, 90, 0]).translate([x_floor - 12, y, z])
+            assert (rod ^ a["Hanger"]).volume() == pytest.approx(0, abs=1e-6)  # pilot hole
+            assert (rod ^ a["Chute"]).volume() == pytest.approx(0, abs=1e-6)  # clearance hole
+            fat = Manifold.cylinder(10, 2.0, circular_segments=12).rotate([0, 90, 0]).translate([x_floor - 10, y, z])
+            assert (fat ^ a["Hanger"]).volume() > 0  # solid plastic around it to thread into
 
 
 def test_spout_stays_inside_rim(result):
@@ -143,4 +153,29 @@ def test_long_spout_warns(tmpl):
 
 def test_short_board_distance_rejected(tmpl):
     with pytest.raises(ValueError):
-        tmpl.build(tmpl.defaults() | {"board_to_center": 60})
+        tmpl.build(tmpl.defaults() | {"board_to_center": 60, "standoff": 60})
+
+
+def test_ball_lands_on_the_chute(tmpl):
+    """Drop the ball straight down from the rim centre: it must hit the chute floor."""
+    for kw in ({}, {"standoff": 40}, {"board_to_center": 90}, {"ball_diameter": 67}):
+        v = tmpl.defaults() | kw
+        r = tmpl.build(v)
+        assert not any("could miss" in n for n in r.notes), kw
+        a = _assembled(r)
+        board_x = a["Backboard"].bounding_box()[3]
+        x = board_x + v["board_to_center"]
+        ball = Manifold.sphere(v["ball_diameter"] / 2, 32)
+        z = v["lead_in"] + 50
+        while z > -400 and (ball.translate([x, 0, z]) ^ a["Chute"]).volume() < 1:
+            z -= 2
+        assert z > -400, f"ball fell past the chute {kw}"
+        hit = ball.translate([x, 0, z]) ^ a["Chute"]
+        hb = hit.bounding_box()
+        # it lands on the floor (low in the ball), not on the top edge of a side panel
+        assert hb[5] < z + 0.2 * v["ball_diameter"], kw
+
+
+def test_small_bend_warns_ball_could_miss(tmpl):
+    r = tmpl.build(tmpl.defaults() | {"bend_radius": 60})
+    assert any("could miss" in n for n in r.notes)

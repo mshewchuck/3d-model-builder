@@ -26,6 +26,10 @@ SEG = 96
 CHUTE_COLOR = "#5b5f66"
 HANGER_COLOR = "#2b2b2b"
 SIDE_CLEARANCE = 5.0  # room each side of the ball between the side panels
+DEPTH_TOP = 0.6  # side panel depth at the top, as a fraction of the ball diameter
+DEPTH_END = 0.42  # ...tapering to this at the spout (sloped side profile)
+LIP_H = 4.0  # inward lip along the side panels' open edges, leaning forward at 45 degrees
+LIP_T = 2.0
 BEAD = 3.0  # glue bead along the back seam (sticks out this far behind the floor)
 PIN_R = 0.95  # holes for 1.75 mm filament alignment pins
 PIN_DEPTH = 3.0  # per half
@@ -104,7 +108,8 @@ class CurvedReturnTemplate(Template):
         t = v["wall"]
         ball = v["ball_diameter"]
         w_in = ball + 2 * SIDE_CLEARANCE  # inside width between the side panels
-        depth = 0.6 * ball  # side panels reach this far in from the floor (past the ball centre)
+        depth = DEPTH_TOP * ball  # side panels reach this far in from the floor at the top...
+        depth_end = DEPTH_END * ball  # ...and taper to this at the spout
         rf = v["bend_radius"]  # floor inner face radius
         zc = t + w_in / 2  # the split plane (centre of the floor)
         angle = v["bend_angle"]
@@ -118,7 +123,7 @@ class CurvedReturnTemplate(Template):
 
         half = Manifold.revolve(profile, SEG, angle)
         half = half + along_lead(Manifold.extrude(profile, lead_len + 0.5).translate([0, 0, -0.5]))
-        rc = min(depth + t, exit_len) if exit_len > 0 else 0
+        rc = min(depth_end + t, exit_len) if exit_len > 0 else 0
         if exit_len > 0:
             ext = Manifold.extrude(profile, exit_len + 0.5)  # 0.5 mm overlap fuses it to the bend
             # Rounded spout: the side panel curves down to the floor along a quarter circle.
@@ -128,17 +133,67 @@ class CurvedReturnTemplate(Template):
                 [-90, 0, 0]).translate([rf + t, -2, rc])
             half = half + self._exit(ext ^ keep, exit_len, angle)
 
-        # Windows in the side panel (flat on the plate, so any size prints cleanly).
+        # Sloped side profile: the panels' open edge runs from `depth` at the top down to
+        # `depth_end` at the spout. Path position p is measured along the floor from the start
+        # of the bend (negative up the lead-in). The cut is vertical as printed.
+        th = math.radians(angle)
+        arc = rf * th
+        total = arc + exit_len
+
+        def depth_at(p):
+            return depth if p <= 0 else depth + (depth_end - depth) * min(p / total, 1.0)
+
+        def point(p, r_off):  # point on the path at p, r_off from the bend axis side of the floor
+            if p <= 0:
+                return (r_off, p)
+            if p <= arc:
+                a = p / rf
+                return (r_off * math.cos(a), r_off * math.sin(a))
+            w = p - arc
+            return (r_off * math.cos(th) - w * math.sin(th), r_off * math.sin(th) + w * math.cos(th))
+
+        steps = [(-lead_len - 2) + i * 2.0 for i in range(int((total + lead_len + 4) / 2) + 1)]
+        edge = [point(p, rf - depth_at(p)) for p in steps]
+        outer = [point(p, rf + 40) for p in reversed(steps)]
+        keep = Manifold.extrude(_poly(edge + outer), zc + 2).translate([0, 0, -1])
+        half = half ^ keep
+
+        # Lip along the open edge: a small fin on the panel leaning 45 degrees inward and
+        # forward (a 45 degree overhang as printed). It stops where the spout rounds off.
+        def inward(x, y):  # unit vector from the floor toward the open side, at (x, y)
+            if y < 0:
+                return (-1.0, 0.0)
+            if math.atan2(y, x) <= th:
+                r = math.hypot(x, y)
+                return (-x / r, -y / r)
+            return (-math.cos(th), -math.sin(th))
+
+        lip_steps = [p for p in steps if -lead_len <= p <= total - rc]
+        band = ([point(p, rf - depth_at(p)) for p in lip_steps]
+                + [point(p, rf - depth_at(p) + LIP_T + 1.0) for p in reversed(lip_steps)])
+        fin = Manifold.extrude(_poly(band), LIP_H + 0.01).translate([0, 0, t - 0.01])
+
+        def lean(pt):
+            x, y, z = pt
+            k = max(0.0, z - t)
+            nx, ny = inward(x, y)
+            return [x + nx * k, y + ny * k, z]
+
+        half = half + fin.refine_to_length(4.0).warp(lean)
+
+        # Windows in the side panel (flat on the plate, so any size prints cleanly); each one
+        # follows the sloped edge.
         mw = 6.0
-        win = _poly([(rf - depth + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - depth + mw, t + 1)])
         r_mid = rf - depth / 2
         win_deg, rib_deg = math.degrees(24.0 / r_mid), math.degrees(8.0 / r_mid)
         pitch = win_deg + rib_deg
         nw = max(0, int((angle - rib_deg) // pitch))
         w0 = (angle - nw * pitch + rib_deg) / 2
-        window = Manifold.revolve(win, 8, win_deg)
         for i in range(nw):
-            half = half - window.rotate([0, 0, w0 + i * pitch])
+            a_mid = w0 + i * pitch + win_deg / 2
+            d = depth_at(rf * math.radians(a_mid + win_deg / 2))  # shallowest end of this window
+            win_i = _poly([(rf - d + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - d + mw, t + 1)])
+            half = half - Manifold.revolve(win_i, 8, win_deg).rotate([0, 0, w0 + i * pitch])
 
         # Floor slots across the path. As printed the floor is a vertical wall, so each slot's
         # top is a 10 mm bridge. A 4 mm strip is left along the seam.
@@ -152,6 +207,8 @@ class CurvedReturnTemplate(Template):
         rounded_from = exit_len - rc
         pos = 6.0
         while exit_len > 0 and pos + 10 <= exit_len - 8:
+            d = depth_at(arc + pos + 10)
+            win = _poly([(rf - d + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - d + mw, t + 1)])
             cut = floor_cut + win if pos + 10 <= rounded_from - 3 else floor_cut
             half = half - self._exit(Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)]), 0, angle)
             pos += 16.0

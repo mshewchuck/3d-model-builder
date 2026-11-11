@@ -202,3 +202,34 @@ def test_ball_lands_on_the_chute(tmpl):
 def test_small_bend_warns_ball_could_miss(tmpl):
     r = tmpl.build(tmpl.defaults() | {"bend_radius": 60})
     assert any("could miss" in n for n in r.notes)
+
+
+def test_ball_rolls_down_the_middle_and_cannot_jam(tmpl):
+    import math
+
+    from modelbuilder.templates.curved_return import LIP_H
+
+    v = tmpl.defaults()
+    v["bend_radius"] = tmpl.auto_bend_radius(v)
+    _, full, g = tmpl._chute(v)
+    rf, r = v["bend_radius"], v["ball_diameter"] / 2
+    th = math.radians(v["bend_angle"])
+    arc = rf * th
+    ball = Manifold.sphere(r, 40)
+    for p in range(-int(v["lead_in"]) + 2, int(arc + v["exit_length"] * 0.5), 6):
+        if p <= 0:
+            x, y = rf - r - 0.5, p
+        elif p <= arc:
+            a = p / rf
+            x, y = (rf - r - 0.5) * math.cos(a), (rf - r - 0.5) * math.sin(a)
+        else:
+            w = p - arc
+            x = (rf - r - 0.5) * math.cos(th) - w * math.sin(th)
+            y = (rf - r - 0.5) * math.sin(th) + w * math.cos(th)
+        assert (ball.translate([x, y, g["zc"]]) ^ full).volume() < 1e-6, p  # centred: no contact
+    # The lips sit past the ball's widest point: the gap between them is wider than the ball
+    # ever is at that depth, so it can be guided by them but never wedged.
+    gap_between_lips = g["w_in"] - 2 * LIP_H
+    lip_depth = g["depth"] * (0.42 / 0.6) - 2  # shallowest lip, at the spout end
+    widest_there = 2 * math.sqrt(max(0.0, r * r - (lip_depth - r) ** 2))
+    assert gap_between_lips > widest_there

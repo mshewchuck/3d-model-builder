@@ -15,7 +15,7 @@ ball by default.
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute: a curved U-channel (65° bend, 35 mm rounded spout) with flat side panels with windows, a slotted floor, and a slim glue bead along the back seam | 1, which you cut into 2 identical halves in the slicer | Exported lying on a side panel, 94 mm tall. Cut it flat at Z = 47 mm, so each half lies on its side panel. No supports |
+| Chute: a curved U-channel (65° bend, 35 mm rounded spout) with a slotted floor and flat side panels with windows. The sides slope from 48 mm deep at the top to 34 mm at the spout, with a 45° inward lip along their open edges. A slim glue bead runs along the back seam | 1, which you cut into 2 identical halves in the slicer | Exported lying on a side panel, 94 mm tall. Cut it flat at Z = 47 mm, so each half lies on its side panel. No supports |
 | Hanger: a cap over the rim block, a spine down the backboard, and a short screw block with support triangles | 1 | Lying on its backboard side. No supports |
 
 Everything fits on one 256 mm plate, or on two plates on an A1 mini. It uses about 92 cm³
@@ -39,6 +39,8 @@ identical halves.
 - **Chute:** after the cut, you have two identical halves.
   - Each half lies flat on its side panel, so the whole panel is the first layer.
   - The floor slots bridge 10 mm, and the glue bead has a 45° underside.
+  - The edge lips lean at 45°, inward and forward. An outward flare would point down into
+    the plate, so it can't print this way.
 - **Hanger:** it lies on the side that faces the backboard.
   - The screw block and support triangles rise straight up from the plate.
   - Its two lightening pockets have 10 mm roofs.

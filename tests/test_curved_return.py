@@ -22,7 +22,7 @@ def test_parts_are_single_solids(result):
     names = [p.name for p in result.print_parts]
     assert sum(n.startswith("Chute half") for n in names) == 2
     assert sum(n.startswith("Swivel ring") for n in names) == 1
-    assert sum(n.startswith("Hook") for n in names) == 4
+    assert names.count("Hanger") == 1  # default: hangs from the rim block, no hooks
     for p in result.print_parts:
         # The print-in-place swivel is two interlocked, separate pieces by design.
         expected = 2 if p.name.startswith("Swivel") else 1
@@ -151,3 +151,24 @@ def test_prints_without_supports(tmpl, angle):
 def test_bend_angles_build_one_piece(tmpl, angle):
     r = tmpl.build(tmpl.defaults() | {"bend_angle": angle})
     assert len(r.print_parts[0].solid.decompose()) == 1
+
+
+def test_rim_hook_option(tmpl):
+    r = tmpl.build(tmpl.defaults() | {"mount": 0})
+    names = [p.name for p in r.print_parts]
+    assert sum(n.startswith("Hook") for n in names) == 4 and "Hanger" not in names
+
+
+def test_hanger_fits_block_and_clears_chute(tmpl):
+    v = tmpl.defaults()
+    r = tmpl.build(v)
+    a = {p.name: p.solid for p in r.assembled}
+    hanger, block = a["Hanger"], a["Rim block"]
+    assert (hanger ^ block).volume() == pytest.approx(0, abs=1e-6)
+    assert hanger.min_gap(block, 2) == pytest.approx(0.4, abs=0.05)  # snug cap
+    xc = -v["bend_radius"] + v["ring_opening"] / 2 + 6
+    for ang in range(0, 360, 45):  # every click position
+        c = a["Chute"].translate([-xc, 0, 0]).rotate([0, 0, ang]).translate([xc, 0, 0])
+        assert hanger.min_gap(c, 10) > 2
+    i, o = a["Inner ring (turns)"], a["Outer ring (hangs)"]
+    assert hanger.min_gap(i, 5) > 1  # the turning ring never rubs the hanger

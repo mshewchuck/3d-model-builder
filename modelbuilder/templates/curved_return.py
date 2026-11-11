@@ -27,6 +27,7 @@ SEG = 96
 CHUTE_COLOR = "#5b5f66"
 RING_COLOR = "#f2c811"
 HOOK_COLOR = "#2b2b2b"
+HANGER_COLOR = "#2b2b2b"
 RING_THICKNESS = 2.6
 RING_BAND = 8.0  # slim hoop; tabs are added only where holes are
 RING_BACK_GAP = 6.0  # ring opening starts this far in front of the floor
@@ -50,6 +51,16 @@ BUMP_P = 0.45  # how far the click bumps stand up
 POSITIONS = 8
 BUMP_ANGLES = (0, 135, 225)  # multiples of 360/8, spread for a stable three-point seat
 CORD_ANGLES = (45, -45, 110, -110)
+# Backboard hanger: caps the block where the rim meets the backboard.
+CAP_FIT = 0.4  # clearance around the block
+CAP_T = 2.4  # cap wall thickness
+FINGER = 6.0  # size of the two front fingers that stop the cap sliding off the block
+LEG_W = 10.0  # leg / spine width
+LEG_T = 4.0  # leg thickness (lies flat against the backboard)
+BRACKET_T = 4.0
+BRACKET_W = 30.0
+TAB_LEN = 16.0  # tab on the ring that the bracket screws to
+SCREW_R = 1.7  # M3
 
 
 def _poly(points) -> CrossSection:
@@ -90,6 +101,20 @@ class CurvedReturnTemplate(Template):
         Param("swivel", "Swivel ring (1 = on, 0 = off)", 1, 0, 1, unit="",
               help="On: the chute sits in a turning inner ring that clicks into 8 directions. "
                    "Off: one fixed ring (lighter); turn it by sliding the hooks around the rim."),
+        Param("mount", "Mount (1 = backboard bracket, 0 = rim hooks)", 1, 0, 1, unit="",
+              help="1: hang it from the block where the rim joins the backboard. "
+                   "0: hang the ring from the rim on 4 cords with printed hooks."),
+        Param("block_width", "Rim block width", 57.2, 20, 150,
+              help="Side to side, along the backboard (2.25 in = 57.2 mm)."),
+        Param("block_depth", "Rim block depth", 25.4, 5, 80,
+              help="How far it sticks out from the backboard (1 in = 25.4 mm)."),
+        Param("block_height", "Rim block height", 12.7, 5, 80,
+              help="Top to bottom (0.5 in = 12.7 mm)."),
+        Param("board_to_center", "Backboard to rim centre", 110, 60, 300,
+              help="Straight out from the backboard to the middle of the rim. The ring centres here."),
+        Param("drop", "Block to ring drop", 170, 60, 400,
+              help="From the bottom of the rim block down to the top of the ring. Make it longer than "
+                   "the net so the ball falls out of the net first."),
         Param("rim_tube_diameter", "Rim tube diameter", 12, 4, 30,
               help="Thickness of the rim's metal tube. Sets the size of the hooks."),
         Param("bed_size", "Printer bed size", 256, 150, 400,
@@ -352,6 +377,71 @@ class CurvedReturnTemplate(Template):
         ).translate([-rm, -shank_len - 3])
         return Manifold.extrude(curl + tip + shank + eye, 4.0)
 
+    # ----------------------------------------------------------------- hanger
+    def _ring_tab(self, xc, r_back, z0, height):
+        """Solid tab on the back of the hanging ring with 2 screw holes (prints from the plate)."""
+        x0 = xc - r_back - TAB_LEN + 1.5  # only 1.5 mm onto the outer rim, clear of the inner ring
+        tab = Manifold.cube([TAB_LEN, BRACKET_W - 4, height]).translate([x0, -(BRACKET_W - 4) / 2, z0])
+        # Screws spaced front-to-back as well as side-to-side, so the ring can't tip forward.
+        holes = [(x0 + 4.0, -7.0), (x0 + TAB_LEN - 5.0, 7.0)]
+        for x, y in holes:
+            tab = tab - Manifold.cylinder(height + 2, SCREW_R, circular_segments=16).translate([x, y, z0 - 1])
+        return tab, holes
+
+    def _hanger(self, v, x_board, z_bracket, holes):
+        """One-piece hanger in the installed frame. Prints lying on its backboard side."""
+        bw, bd, bh = v["block_width"], v["block_depth"], v["block_height"]
+        f, t = CAP_FIT, CAP_T
+        zb = z_bracket + BRACKET_T + v["drop"]  # bottom of the rim block
+        top = zb + bh
+        xo = x_board
+        yo = bw / 2 + f  # inside face of the end plates
+
+        def box(x0, x1, y0, y1, z0, z1):
+            return Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0])
+
+        cap = box(xo, xo + bd + f + t, -(yo + t), yo + t, top + f, top + f + t)  # sits on the block
+        for sgn in (1, -1):
+            y0, y1 = sorted((sgn * yo, sgn * (yo + t)))
+            cap = cap + box(xo, xo + bd + f + t, y0, y1, zb + 0.4 * bh, top + f + t)  # end plates
+            fy0, fy1 = sorted((sgn * (bw / 2 - FINGER), sgn * (yo + t)))
+            cap = cap + box(xo + bd + f, xo + bd + f + t, fy0, fy1, top - FINGER, top + f + t)
+
+        # Legs down past the block ends, joining into one spine (a flat profile on the board).
+        z_join = zb - 30
+        z_low = z_bracket + BRACKET_T + 30
+        legs = CrossSection()
+        for sgn in (1, -1):
+            yl = sgn * (yo + t / 2 + LEG_W / 2 - t / 2)
+            legs = legs + CrossSection.batch_hull([
+                CrossSection.square([LEG_W, 1], center=True).translate([yl, zb + 0.4 * bh + 0.5]),
+                CrossSection.square([LEG_W, 1], center=True).translate([yl, zb - 6]),
+            ])
+            legs = legs + CrossSection.batch_hull([
+                CrossSection.circle(LEG_W / 2, 24).translate([yl, zb - 6]),
+                CrossSection.circle(LEG_W / 2, 24).translate([0, z_join]),
+            ])
+        legs = legs + CrossSection.square([LEG_W, z_join - z_low]).translate([-LEG_W / 2, z_low])
+        legs = legs + CrossSection.batch_hull([  # flare into the bracket
+            CrossSection.square([LEG_W, 1]).translate([-LEG_W / 2, z_low]),
+            CrossSection.square([BRACKET_W, 1]).translate([-BRACKET_W / 2, z_bracket]),
+        ])
+        # Profile (y, z) extruded along +X from the board: map local (u, w, e) -> (x = e, y = u, z = w).
+        spine = Manifold.extrude(legs, LEG_T).transform([[0, 0, 1, xo], [1, 0, 0, 0], [0, 1, 0, 0]])
+
+        # Shelf straight out from the board; the ring's tab screws up under it.
+        x_end = max(x for x, _ in holes) + 6
+        bracket = box(xo, x_end, -BRACKET_W / 2, BRACKET_W / 2, z_bracket, z_bracket + BRACKET_T)
+        lg = min(x_end - xo - 8, 30.0)  # 45 degree gussets above the shelf
+        for y in (-BRACKET_W / 2, BRACKET_W / 2 - 3):
+            g = _poly([(0, 0), (lg, 0), (0, lg)])
+            gus = Manifold.extrude(g, 3).transform([[1, 0, 0, xo], [0, 0, 1, y], [0, 1, 0, z_bracket + BRACKET_T]])
+            bracket = bracket + gus
+        for x, y in holes:
+            bracket = bracket - Manifold.cylinder(BRACKET_T + 2, SCREW_R, circular_segments=16).translate(
+                [x, y, z_bracket - 1])
+        return cap + spine + bracket
+
     # ------------------------------------------------------------------ build
     def build(self, v: dict[str, float]) -> BuildResult:
         half, chute, geo = self._chute(v)
@@ -372,13 +462,40 @@ class CurvedReturnTemplate(Template):
             cord_pts = [(xc + r_c * math.cos(math.radians(a)), r_c * math.sin(math.radians(a)))
                         for a in CORD_ANGLES]
             cord_z = v["lead_in"] + RING_THICKNESS
+        hanger = None
+        if v["mount"] >= 0.5:
+            xc = -geo["rf"] + v["ring_opening"] / 2 + RING_BACK_GAP
+            hang = outer_ring if v["swivel"] >= 0.5 else ring_inst
+            hb = hang.bounding_box()
+            r_back = xc - hb[0]
+            tab, holes = self._ring_tab(xc, r_back, hb[2], hb[5] - hb[2])
+            hang = hang + tab
+            if v["swivel"] >= 0.5:
+                outer_ring = hang
+                rings = [Part("Swivel ring (print-in-place)", inner_ring + outer_ring, RING_COLOR)]
+                assembled = [p for p in assembled if not p.name.startswith("Outer")]
+                assembled.append(Part("Outer ring (hangs)", outer_ring, RING_COLOR))
+            else:
+                ring_inst = hang
+                rings = [Part("Ring", ring_inst, RING_COLOR)]
+            x_board = xc - v["board_to_center"]
+            if x_board > hb[0] - 5:
+                raise ValueError("Backboard to rim centre is too short: the ring would hit the board.")
+            hanger = self._hanger(v, x_board, hb[5], holes)
+            assembled.append(Part("Hanger", hanger, HANGER_COLOR))
+            # Preview only: the rim block and a slice of backboard.
+            zb = hb[5] + BRACKET_T + v["drop"]
+            blk = Manifold.cube([v["block_depth"], v["block_width"], v["block_height"]]).translate(
+                [x_board, -v["block_width"] / 2, zb])
+            board = Manifold.cube([2, 200, 320]).translate([x_board - 2, -100, hb[2] - 120])
+            assembled += [Part("Rim block", blk, "#ff5a1f"), Part("Backboard", board, "#e8e8e8")]
         if v["swivel"] < 0.5:
             assembled += rings
         # Preview only: cords up to the hooks (not exported).
         cord_len = 110.0
         b = hook.bounding_box()
         hook_up = hook.translate([-(b[0] + b[3]) / 2, -b[1], -2.0]).rotate([90, 0, 0])
-        for (cx, cy), ang in zip(cord_pts, CORD_ANGLES):
+        for (cx, cy), ang in zip(cord_pts if v["mount"] < 0.5 else [], CORD_ANGLES):
             z0 = cord_z
             cord = Manifold.cylinder(cord_len, 1.5, circular_segments=8).translate([cx, cy, z0])
             assembled.append(Part("Cord", cord, "#888888"))
@@ -386,9 +503,10 @@ class CurvedReturnTemplate(Template):
             assembled.append(Part("Hook", hk, HOOK_COLOR))
 
         bed = v["bed_size"]
-        others = list(rings) + [
-            Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)
-        ]
+        if hanger is not None:
+            others = list(rings) + [Part("Hanger", hanger.rotate([0, -90, 0]), HANGER_COLOR)]
+        else:
+            others = list(rings) + [Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)]
         # Spin the halves on the plate to find the packing that uses the fewest plates.
         best = None
         for spin in range(0, 180, 15):
@@ -436,8 +554,17 @@ class CurvedReturnTemplate(Template):
                 "8 positions, 45 degrees apart. Print it at 0.2 mm layers or finer. Don't scale it in "
                 "the slicer, because that changes the gap."
             )
-        notes.append(
-            "Hanging: tie 4 cords (about 20-30 cm) from the cord holes to the hook eyelets and hang "
-            "the hooks on the rim so the ring sits just under the net."
-        )
+        if hanger is not None:
+            notes.append(
+                "Hanging: press the hanger's cap down over the block where the rim joins the "
+                "backboard. Its legs run down the board around the block ends. Screw the ring's back "
+                "tab up under the hanger shelf with 2 M3 x 12 mm screws and nuts. The hanger prints "
+                "lying on its backboard side. Measure the block and the board-to-rim-centre "
+                "distance, because the cap is a snug 0.4 mm fit."
+            )
+        else:
+            notes.append(
+                "Hanging: tie 4 cords (about 20-30 cm) from the cord holes to the hook eyelets and "
+                "hang the hooks on the rim so the ring sits just under the net."
+            )
         return BuildResult(assembled, print_parts, notes)

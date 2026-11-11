@@ -7,17 +7,19 @@ Pick a template, type your dimensions, check the 3D preview, click **Export .3mf
 
 ## Template: Curved ball return (store style)
 
-This one is styled after store-bought hoop returns. A catch ring hangs from the rim on
-4 cords. The ball drops through the net into the ring, rolls down a curved trough with
+This one is styled after store-bought hoop returns. By default a printed hanger caps the
+block where the rim joins the backboard, and the catch ring hangs from it. Set `mount=0` to
+hang the ring from the rim on 4 cords instead. The ball drops through the net into the ring, rolls down a curved trough with
 windows, and comes back out toward you. It's sized for an 80 mm mini airless ball by default.
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
 | Chute half: one side of a curved U-channel (70° bend by default): a flat side panel with windows, half of the slotted floor, joining ears, and a rounded spout | 2 (identical) | Flat on its side panel, about 47 mm tall. No supports |
 | Swivel ring: an inner ring (the chute ties to it) nested in an outer ring (it hangs from the cords), clicking into 8 directions | 1 (print-in-place) | Flat, as one part. Twist once after printing to free it |
-| Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
+| Hanger: a cap over the rim block, legs down the backboard, and a shelf for the ring | 1 | Lying on its backboard side. No supports |
+| Hooks (only with `mount=0`): J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-The full set (2 chute halves, swivel ring, 4 hooks) uses about 80 cm³ of plastic, about 100 g of PLA.
+The full set (2 chute halves, swivel ring, hanger) uses about 99 cm³ of plastic, about 120 g of PLA.
 
 ### Printing without supports
 
@@ -43,7 +45,12 @@ hole on the other side of the wall.
 To change direction, lift the chute about 1 mm, turn it, and let it settle into the next
 click. There are 8 positions, 45° apart.
 
-**Hanging:** Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the
+**Backboard hanger:** measure the block where the rim meets the backboard. The defaults are
+2.25″ wide, 1″ deep and 0.5″ tall. Also measure from the backboard to the centre of the rim.
+The cap is a snug fit with 0.4 mm of clearance. Press it down over the block. The ring's
+back tab screws up under the hanger's shelf with 2 M3 × 12 mm screws and nuts.
+
+**Rim hooks (`mount=0`):** Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the
 hooks on the rim so the ring sits just under the net.
 
 ## Template: Simple flat tray

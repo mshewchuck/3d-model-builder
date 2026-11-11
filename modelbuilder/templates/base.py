@@ -90,47 +90,65 @@ def plate_footprint(parts: list[Part]) -> tuple[float, float, float]:
     return (max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs))
 
 
-def pack_on_plate(parts: list[Part], bed: float, gap: float = 5.0, margin: float = 3.0) -> tuple[list[Part], bool]:
-    """Try a few packing orders and keep the first that fits on one plate."""
+PLATE_SPACING = 30.0  # gap between plates laid side by side along +X
+
+
+def pack_plates(parts: list[Part], bed: float, gap: float = 5.0, margin: float = 3.0):
+    """Pack parts onto as few square plates as possible (origin at the plate corner, like
+    Bambu printers). Plate k sits k * (bed + PLATE_SPACING) along +X, so in Bambu Studio
+    Arrange (or "add plate") can drop them onto separate plates.
+
+    Returns (placed parts in the original order, number of plates).
+    """
     keys = [
         lambda p: -p.size()[1],
         lambda p: -p.size()[0] * p.size()[1],
         lambda p: -p.size()[0],
+        lambda p: -max(p.size()[:2]),
     ]
-    result = None
+    best = None
     for key in keys:
         order = sorted(range(len(parts)), key=lambda i: key(parts[i]))
         result = _shelf_pack(parts, order, bed, gap, margin)
-        if result[1]:
-            return result
-    return result
+        if best is None or result[1] < best[1]:
+            best = result
+    return best
+
+
+def pack_on_plate(parts: list[Part], bed: float, gap: float = 5.0, margin: float = 3.0) -> tuple[list[Part], bool]:
+    """Pack parts; returns (placed parts, whether everything fit on one plate)."""
+    placed, plates = pack_plates(parts, bed, gap, margin)
+    return placed, plates == 1
 
 
 def _shelf_pack(parts, order, bed, gap, margin):
-    """Shelf-pack parts onto a square bed (origin at the plate corner, like Bambu printers).
-
-    Returns the placed parts and whether everything fit on one plate. Parts that do not fit
-    are placed to the right of the plate so Bambu Studio's Arrange can move them to plate 2.
-    """
+    plates: list[dict] = []  # each: x, y, row_h
     placed: list[Part | None] = [None] * len(parts)
-    x = y = margin
-    row_h = 0.0
-    fits = True
-    overflow_x = bed + 20
+
+    def try_place(pl, sx, sy):
+        x, y, row_h = pl["x"], pl["y"], pl["row_h"]
+        if x + sx > bed - margin and x > margin:
+            x, y, row_h = margin, y + row_h + gap, 0.0
+        if x + sx > bed - margin or y + sy > bed - margin:
+            return None
+        pl.update(x=x + sx + gap, y=y, row_h=max(row_h, sy))
+        return x, y
+
     for i in order:
         p = parts[i]
         sx, sy, _ = p.size()
-        if x + sx > bed - margin and x > margin:  # new row
-            x, y = margin, y + row_h + gap
-            row_h = 0.0
+        spot = None
+        for k, pl in enumerate(plates):
+            xy = try_place(pl, sx, sy)
+            if xy:
+                spot = (k, xy)
+                break
+        if spot is None:
+            plates.append(dict(x=margin, y=margin, row_h=0.0))
+            xy = try_place(plates[-1], sx, sy) or (margin, margin)  # oversize parts still go somewhere
+            spot = (len(plates) - 1, xy)
+        k, (x, y) = spot
         b = p.solid.bounding_box()
-        if y + sy > bed - margin or sx > bed - 2 * margin:
-            fits = False
-            dest = (overflow_x, margin)
-            overflow_x += sx + gap
-        else:
-            dest = (x, y)
-            x += sx + gap
-            row_h = max(row_h, sy)
-        placed[i] = Part(p.name, p.solid.translate([dest[0] - b[0], dest[1] - b[1], -b[2]]), p.color)
-    return placed, fits
+        ox = k * (bed + PLATE_SPACING)
+        placed[i] = Part(p.name, p.solid.translate([ox + x - b[0], y - b[1], -b[2]]), p.color)
+    return placed, len(plates)

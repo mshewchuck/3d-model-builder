@@ -13,27 +13,29 @@ windows, and comes back out toward you. It's sized for an 80 mm mini airless bal
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute: a curved trough (70° bend by default) with a flat floor, 45° lips, slots in the floor and lips, and a rounded spout | 1 | Lying on its side. No supports, Brim set to Outer only |
+| Chute half: one side of a curved U-channel (70° bend by default): a flat side panel with windows, half of the slotted floor, joining ears, and a rounded spout | 2 (identical) | Flat on its side panel, about 47 mm tall. No supports |
 | Swivel ring: an inner ring (the chute ties to it) nested in an outer ring (it hangs from the cords), clicking into 8 directions | 1 (print-in-place) | Flat, as one part. Twist once after printing to free it |
 | Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-All six parts fit on one 256 mm Bambu plate and use about 72 cm³ of plastic (about 62 cm³ with the fixed ring, `swivel=0`).
+The full set (2 chute halves, swivel ring, 4 hooks) uses about 80 cm³ of plastic, about 100 g of PLA.
 
 ### Printing without supports
 
-Print the chute lying on its side, with the curve flat on the plate and the edge of one
-lip touching the plate.
-- The floor is a vertical wall and the two lips lean at 45°, which is within the range a
-  printer handles on its own.
-- The floor and lip slots are cut across the chute's path, so their tops bridge 10 mm at
-  most. The zip-tie holes bridge 4 mm.
-- A test (`test_prints_without_supports`) scans the mesh and fails if any surface
-  overhangs past 45° over a longer span.
-- Only the thin lip edge touches the plate, so set **Brim** to *Outer only* (about 5 mm)
-  in Bambu Studio for grip. Turn supports **off**.
+The chute is split down the middle of its floor into two identical halves.
+- Each half lies flat on its side panel, so the whole panel is the first layer. That's a large, stable footprint.
+- The half floor rises from the panel as a short vertical wall, about 47 mm tall.
+- The side windows are holes in a flat plate, so they need no bridging.
+- The floor slots bridge 10 mm. The joining ears have 45° undersides.
+- `test_prints_without_supports` scans every part for overhangs.
+
+**Joining the halves:** put them together floor to floor. Five ears along the back pair
+up. Fasten each pair with an M3 × 20 mm screw and nut, or a small zip tie.
+
+With an 80 mm ball the parts need two 256 mm plates. The file lays them out side by side.
+In Bambu Studio, add a plate and press **A** (Arrange).
 
 **Chute to ring:** the chute's top end sits flat against the underside of the inner ring.
-Three small zip ties lock it on: one at the back wall and one at each side lip. Each tie goes
+Four small zip ties lock it on: two through the back wall and one through each side panel. Each tie goes
 down through a ring hole, through the slot in the chute wall, and back up through the ring
 hole on the other side of the wall.
 

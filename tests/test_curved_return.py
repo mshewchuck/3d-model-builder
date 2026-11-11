@@ -20,7 +20,7 @@ def result(tmpl):
 
 def test_parts_are_single_solids(result):
     names = [p.name for p in result.print_parts]
-    assert names.count("Chute") == 1
+    assert sum(n.startswith("Chute half") for n in names) == 2
     assert sum(n.startswith("Swivel ring") for n in names) == 1
     assert sum(n.startswith("Hook") for n in names) == 4
     for p in result.print_parts:
@@ -69,12 +69,19 @@ def test_swivel_clicks_into_positions(tmpl):
     assert drop(inner) - drop(between) >= 0.3  # settles noticeably deeper at a click
 
 
-def test_defaults_fit_one_bambu_plate_without_overlap(result):
-    assert not any(n.startswith("Not everything") for n in result.notes)
+def test_plate_layout_without_overlap(result):
+    from modelbuilder.templates.base import PLATE_SPACING
+
+    pitch = 256 + PLATE_SPACING
+    plates = set()
     for p in result.print_parts:
         b = p.solid.bounding_box()
-        assert b[0] >= 0 and b[1] >= 0 and b[3] <= 256 and b[4] <= 256, p.name
+        k = int(b[0] // pitch)
+        plates.add(k)
+        x0 = k * pitch
+        assert b[0] >= x0 and b[3] <= x0 + 256 and b[1] >= 0 and b[4] <= 256, p.name
         assert b[2] == pytest.approx(0, abs=1e-6), p.name
+    assert len(plates) <= 2
     for a, b in itertools.combinations(result.print_parts, 2):
         assert (a.solid ^ b.solid).volume() == pytest.approx(0, abs=1e-6)
 
@@ -84,19 +91,28 @@ def test_light(result):
     assert total < 100_000  # under 100 cm^3
 
 
-def test_ball_fits_trough(tmpl):
+def test_ball_fits_channel(tmpl):
     v = tmpl.defaults()
-    _, geo = tmpl._chute(v)
-    r = v["ball_diameter"] / 2
-    # Ball resting on the floor centre must clear the 45 degree lips.
-    half = geo["wf"] / 2
-    dist_to_lip = abs(-r - half) / 2 ** 0.5
-    assert dist_to_lip > r
+    _, _, geo = tmpl._chute(v)
+    assert geo["w_in"] > v["ball_diameter"] + 4  # side to side clearance
+    assert geo["depth"] > v["ball_diameter"] / 2  # side panels reach past the ball's centre
+
+
+def test_halves_print_flat_and_short(tmpl):
+    v = tmpl.defaults()
+    half, full, geo = tmpl._chute(v)
+    b = half.bounding_box()
+    assert b[2] == pytest.approx(0, abs=1e-6)
+    assert b[5] - b[2] < 60  # low and stable, sitting on its side panel
+    # Footprint: the first layer is the whole side panel, not a thin edge.
+    first_layer = half.slice(0.1).area()
+    assert first_layer > 3000  # mm^2
+    assert len(full.decompose()) == 1  # the two halves meet into one chute
 
 
 def test_small_bed_overflows_to_second_plate(tmpl):
-    r = tmpl.build(tmpl.defaults() | {"bed_size": 150})
-    assert any(n.startswith("Not everything") for n in r.notes)
+    r = tmpl.build(tmpl.defaults() | {"bed_size": 180})
+    assert any(n.startswith("Needs") for n in r.notes)
 
 
 @pytest.mark.parametrize("ball", [45, 67, 100])

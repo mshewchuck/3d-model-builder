@@ -21,7 +21,7 @@ import math
 
 from manifold3d import CrossSection, JoinType, Manifold
 
-from .base import BuildResult, Param, Part, Template, pack_on_plate
+from .base import BuildResult, Param, Part, Template, pack_plates
 
 SEG = 96
 CHUTE_COLOR = "#5b5f66"
@@ -31,6 +31,10 @@ RING_THICKNESS = 2.6
 RING_BAND = 8.0  # slim hoop; tabs are added only where holes are
 RING_BACK_GAP = 6.0  # ring opening starts this far in front of the floor
 TIE_HOLE_R = 1.8
+SIDE_CLEARANCE = 5.0  # room each side of the ball between the side panels
+EAR = 6.0  # how far the joining ears stick out behind the floor
+EAR_W = 12.0  # ear width along the chute
+EAR_HOLE_R = 1.7  # M3 screw or a small zip tie
 # Swivel (print-in-place): the inner ring (chute tied to it) and the outer ring (hangs from the
 # cords) print nested together. A 45 degree ridge on the inner ring runs in a groove in the outer
 # ring, so it prints without supports and comes off the plate already able to turn.
@@ -94,92 +98,108 @@ class CurvedReturnTemplate(Template):
 
     # ------------------------------------------------------------------ chute
     def _chute(self, v):
+        """Build one chute half (print-ready) and the full chute (for the installed view).
+
+        Cross-section (print frame, r = distance from the bend axis, z = up): a U channel with
+        a flat floor on the outside of the bend and two flat side panels. It is split down the
+        middle of the floor (z = zc) into two identical halves. Each half prints lying on its
+        side panel: a flat plate (big footprint, windows need no bridging) with the half floor
+        rising from it as a short vertical wall. Ears with holes along the back join the halves.
+        """
         t = v["wall"]
-        s = t / math.sqrt(2)
         ball = v["ball_diameter"]
-        wf = 0.6 * ball  # floor width
-        d = 0.55 * ball  # lip depth (radial)
+        w_in = ball + 2 * SIDE_CLEARANCE  # inside width between the side panels
+        depth = 0.6 * ball  # side panels reach this far in from the floor (past the ball centre)
         rf = v["bend_radius"]  # floor inner face radius
-        a = d + s  # z of the floor's lower inner edge, so the lower lip touches z=0
-        top = a + wf  # z of the floor's upper inner edge
-        height = top + d + s
-
-        floor = _poly([(rf, a), (rf + t, a), (rf + t, top + s), (rf, top + s)])
-        lo_lip = _poly([(rf, a), (rf - d, a - d), (rf - d + s, a - d - s), (rf + s, a - s)])
-        hi_lip = _poly([(rf, top), (rf + s, top + s), (rf - d + s, top + d + s), (rf - d, top + d)])
-        # Lower corner is chamfered at 45 degrees so nothing overhangs flat while printing.
-        corners = _poly([(rf, a), (rf + s, a - s), (rf + t, a - s + (t - s)), (rf + t, a)]) + _poly(
-            [(rf, top), (rf + t, top), (rf + t, top + s), (rf + s, top + s)]
-        )
-        profile = floor + lo_lip + hi_lip + corners
-
+        zc = t + w_in / 2  # the split plane (centre of the floor)
         angle = v["bend_angle"]
-        bend = Manifold.revolve(profile, SEG, angle)
-        lead = Manifold.extrude(profile, v["lead_in"] + 0.5).translate([0, 0, -0.5]).transform(
-            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]]
-        )  # runs along -Y from the start of the bend
-        chute = bend + lead
+        lead_len = v["lead_in"]
         exit_len = v["exit_length"]
+
+        profile = _poly([(rf - depth, 0), (rf + t, 0), (rf + t, zc), (rf, zc), (rf, t), (rf - depth, t)])
+
+        def along_lead(m):  # extrusion local w in [0, L] -> runs along -Y from the bend start
+            return m.transform([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]])
+
+        half = Manifold.revolve(profile, SEG, angle)
+        half = half + along_lead(Manifold.extrude(profile, lead_len + 0.5).translate([0, 0, -0.5]))
+        rc = min(depth + t, exit_len) if exit_len > 0 else 0
         if exit_len > 0:
             ext = Manifold.extrude(profile, exit_len + 0.5)  # 0.5 mm overlap fuses it to the bend
-            # Rounded spout: in this local frame the spout end is at w = 0. The lips curve down to
-            # the floor along a quarter circle. The cut surface is vertical while printing, so it
-            # adds no overhang.
-            rc = min(d + t, exit_len)
-            keep = Manifold.cube([rf + t + 10, height + 4, exit_len + 1]).translate([0, -2, rc])
-            keep = keep + Manifold.cylinder(height + 4, rc, circular_segments=SEG).rotate(
+            # Rounded spout: the side panel curves down to the floor along a quarter circle.
+            # The cut is vertical while printing, so it adds no overhang.
+            keep = Manifold.cube([rf + t + 10, zc + 4, exit_len + 1]).translate([0, -2, rc])
+            keep = keep + Manifold.cylinder(zc + 4, rc, circular_segments=SEG).rotate(
                 [-90, 0, 0]).translate([rf + t, -2, rc])
-            ext = ext ^ keep
-            chute = chute + self._exit(ext, exit_len, angle)
+            half = half + self._exit(ext ^ keep, exit_len, angle)
 
-        # Floor slots across the path (8 mm wide, so the ball rolls straight over them).
-        m = 5.0
-        floor_cut = _poly([(rf - 1, a + m), (rf + t + 1, a + m), (rf + t + 1, top - m), (rf - 1, top - m)])
-        slot_deg = math.degrees(10.0 / rf)
-        pitch_deg = math.degrees(16.0 / rf)
-        n = max(0, int((angle - 2 * pitch_deg) // pitch_deg) + 1)
-        start = (angle - (n - 1) * pitch_deg - slot_deg) / 2
+        # Windows in the side panel (flat on the plate, so any size prints cleanly).
+        mw = 6.0
+        win = _poly([(rf - depth + mw, -1), (rf - mw, -1), (rf - mw, t + 1), (rf - depth + mw, t + 1)])
+        r_mid = rf - depth / 2
+        win_deg, rib_deg = math.degrees(24.0 / r_mid), math.degrees(8.0 / r_mid)
+        pitch = win_deg + rib_deg
+        nw = max(0, int((angle - rib_deg) // pitch))
+        w0 = (angle - nw * pitch + rib_deg) / 2
+        window = Manifold.revolve(win, 8, win_deg)
+        for i in range(nw):
+            half = half - window.rotate([0, 0, w0 + i * pitch])
+
+        # Floor slots across the path. As printed the floor is a vertical wall, so each slot's
+        # top is a 10 mm bridge. A 4 mm strip is left along the seam.
+        floor_cut = _poly([(rf - 1, t + 4), (rf + t + 1, t + 4), (rf + t + 1, zc - 4), (rf - 1, zc - 4)])
+        slot_deg, fpitch = math.degrees(10.0 / rf), math.degrees(16.0 / rf)
+        n = max(0, int((angle - 2 * fpitch) // fpitch) + 1)
+        start = (angle - (n - 1) * fpitch - slot_deg) / 2
         slot = Manifold.revolve(floor_cut, 8, slot_deg)
         for i in range(n):
-            chute = chute - slot.rotate([0, 0, start + i * pitch_deg])
-
-        # Slots in the lips (the open-frame look). 10 mm wide, so the print only bridges 10 mm.
-        m2 = 5.0
-        lip_cut = _poly([(rf - d + m2, -1), (rf - m2, -1), (rf - m2, a), (rf - d + m2, a)]) + _poly(
-            [(rf - d + m2, top), (rf - m2, top), (rf - m2, height + 1), (rf - d + m2, height + 1)]
-        )
-        r_mid = rf - d / 2
-        win_deg = math.degrees(10.0 / r_mid)
-        wpitch = math.degrees(16.0 / r_mid)
-        nw = max(1, int((angle - 2 * wpitch) // wpitch) + 1)
-        wstart = (angle - (nw - 1) * wpitch - win_deg) / 2
-        window = Manifold.revolve(lip_cut, 8, win_deg)
-        for i in range(nw):
-            chute = chute - window.rotate([0, 0, wstart + i * wpitch])
-        # Matching slots along the straight exit. Lip slots stop where the rounded spout begins.
-        rounded_from = exit_len - min(d + t, exit_len)
+            half = half - slot.rotate([0, 0, start + i * fpitch])
+        rounded_from = exit_len - rc
         pos = 6.0
-        while pos + 10 <= exit_len - 8:
-            cut = floor_cut + lip_cut if pos + 10 <= rounded_from - 3 else floor_cut
-            piece = Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)])
-            chute = chute - self._exit(piece, 0, angle)
+        while exit_len > 0 and pos + 10 <= exit_len - 8:
+            cut = floor_cut + win if pos + 10 <= rounded_from - 3 else floor_cut
+            half = half - self._exit(Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)]), 0, angle)
             pos += 16.0
 
-        # Zip-tie holes near the top of the lead-in: one through the floor, one through each lip.
-        y_tie = -(v["lead_in"] - 6)
-        zc = (a + top) / 2
-        tie_pts_print = {
-            "floor": ((rf + t / 2, zc), (1.0, 0.0)),
-            "lo_lip": ((rf - d / 2 + s / 2, a - d / 2 - s / 2), (1 / math.sqrt(2), -1 / math.sqrt(2))),
-            "hi_lip": ((rf - d / 2 + s / 2, top + d / 2 + s / 2), (1 / math.sqrt(2), 1 / math.sqrt(2))),
-        }
-        for (pr, pz), _n in tie_pts_print.values():
-            hole = Manifold.cube([8, 4, 8], center=True).translate([pr, y_tie, pz])
-            chute = chute - hole
+        # Ears along the back: each half has a matching ear; bolt or zip-tie them together.
+        ear_prof = _poly([(rf + t - 0.3, zc - 12), (rf + t + EAR, zc - 12 + EAR + 0.3), (rf + t + EAR, zc),
+                          (rf + t - 0.3, zc)])  # 45 degree underside, so it prints unsupported
+        r_hole = rf + t + EAR / 2 + 0.5
+        ear_deg = math.degrees(EAR_W / (rf + t))
+        for frac in (0.2, 0.5, 0.8):
+            a0 = angle * frac - ear_deg / 2
+            ear = Manifold.revolve(ear_prof, 8, ear_deg).rotate([0, 0, a0])
+            ac = math.radians(angle * frac)
+            hole = Manifold.cylinder(20, EAR_HOLE_R, circular_segments=16).translate(
+                [r_hole * math.cos(ac), r_hole * math.sin(ac), zc - 15])
+            half = half + ear - hole
 
-        geo = dict(t=t, d=d, wf=wf, rf=rf, a=a, top=top, zc=zc, height=height, y_tie=y_tie,
-                   ties=tie_pts_print)
-        return chute, geo
+        def straight_ear(place, w_c):
+            e = Manifold.extrude(ear_prof, EAR_W).translate([0, 0, -EAR_W / 2])
+            h = Manifold.cylinder(20, EAR_HOLE_R, circular_segments=16).rotate([-90, 0, 0])
+            h = h.translate([r_hole, zc - 15, 0])
+            return place((e - h).translate([0, 0, w_c]))
+
+        half = half + straight_ear(along_lead, lead_len * 0.4)
+        if exit_len - rc >= EAR_W + 4:
+            half = half + self._exit(straight_ear(lambda m: m, -(exit_len - rc) / 2), 0, angle)
+
+        # Ring tie slots near the top of the lead-in: one through the floor and one through the
+        # side panel on each half (4 ties in all, symmetric).
+        y_tie = -(lead_len - 6)
+        floor_tie_z = zc - 10
+        half = half - Manifold.cube([8, 4, 6], center=True).translate([rf + t / 2, y_tie, floor_tie_z])
+        half = half - Manifold.cube([8, 4, t + 2], center=True).translate([rf - depth / 2, y_tie, t / 2])
+
+        full = half + half.mirror([0, 0, 1]).translate([0, 0, 2 * zc])
+        ties = {
+            "floor_a": ((rf + t / 2, floor_tie_z), (1.0, 0.0)),
+            "floor_b": ((rf + t / 2, 2 * zc - floor_tie_z), (1.0, 0.0)),
+            "side_a": ((rf - depth / 2, t / 2), (0.0, -1.0)),
+            "side_b": ((rf - depth / 2, 2 * zc - t / 2), (0.0, 1.0)),
+        }
+        geo = dict(t=t, rf=rf, zc=zc, w_in=w_in, depth=depth, ties=ties, y_tie=y_tie)
+        return half, full, geo
 
     @staticmethod
     def _exit(m: Manifold, length: float, angle: float) -> Manifold:
@@ -334,7 +354,7 @@ class CurvedReturnTemplate(Template):
 
     # ------------------------------------------------------------------ build
     def build(self, v: dict[str, float]) -> BuildResult:
-        chute, geo = self._chute(v)
+        half, chute, geo = self._chute(v)
         hook = self._hook(v)
         chute_inst = self._to_installed(chute, geo["zc"])
         assembled = [Part("Chute", chute_inst, CHUTE_COLOR)]
@@ -369,34 +389,44 @@ class CurvedReturnTemplate(Template):
         others = list(rings) + [
             Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)
         ]
-        # Spin the chute flat on the plate until everything packs onto one plate.
-        for spin in range(0, 180, 10):
-            print_parts, one_plate = pack_on_plate(
-                [Part("Chute", chute.rotate([0, 0, spin]), CHUTE_COLOR)] + others, bed
+        # Spin the halves on the plate to find the packing that uses the fewest plates.
+        best = None
+        for spin in range(0, 180, 15):
+            h = half.rotate([0, 0, spin])
+            result = pack_plates(
+                [Part("Chute half A", h, CHUTE_COLOR), Part("Chute half B", h, CHUTE_COLOR)] + others, bed
             )
-            if one_plate:
+            if best is None or result[1] < best[1]:
+                best = result
+            if result[1] == 1:
                 break
+        print_parts, n_plates = best
 
         notes = []
-        if not one_plate:
-            notes.append("Not everything fits on one plate: parts that did not fit are placed to the "
-                         "right of the plate. In Bambu Studio press A (Arrange) to move them to plate 2.")
-        for p in print_parts[: 1 + len(rings)]:
+        if n_plates > 1:
+            notes.append(f"Needs {n_plates} plates on a {bed:.0f} mm bed. The file lays them out side "
+                         "by side. In Bambu Studio add a plate and press A (Arrange), and it will "
+                         "split them.")
+        for p in print_parts[: 2 + len(rings)]:
             sx, sy, sz = p.size()
             if max(sx, sy) > bed or sz > bed:
                 notes.append(f"Warning: the {p.name.lower()} is {sx:.0f} x {sy:.0f} x {sz:.0f} mm, "
                              f"larger than your {bed:.0f} mm bed. Reduce the bend radius or ring opening.")
         notes.append(
-            "Bambu Studio: supports OFF. The chute prints lying on its side (the curve flat on the "
-            "plate): walls are vertical or 45 degrees and slots bridge 10 mm at most. Its lower lip "
-            "edge is all that touches the plate, so set Brim to Outer only (about 5 mm). PETG or PLA."
+            "Bambu Studio: supports OFF. The chute is two identical halves. Each prints lying flat "
+            "on its side panel, with the half floor standing up as a short wall. Floor slots bridge "
+            "10 mm at most. PETG or PLA."
         )
         tied_to = "inner ring" if v["swivel"] >= 0.5 else "ring"
         notes.append(
+            "Joining the halves: line up the two halves floor to floor. The 5 ears along the back "
+            "pair up. Put an M3 x 20 mm screw and nut, or a small zip tie, through each pair."
+        )
+        notes.append(
             f"Chute to ring: the chute's top end sits flat against the underside of the {tied_to}. "
-            "3 small zip ties (2.5-3.6 mm wide) lock it on: one at the back wall and one at each side "
-            "lip. Each tie goes down through a ring hole, through the slot in the chute wall, and back "
-            "up through the ring hole on the other side of the wall. Pull it tight and trim it."
+            "4 small zip ties (2.5-3.6 mm wide) lock it on: two through the back wall and one through "
+            "each side panel. Each tie goes down through a ring hole, through the slot in the chute "
+            "wall, and back up through the ring hole on the other side. Pull it tight and trim it."
         )
         if v["swivel"] >= 0.5:
             notes.append(

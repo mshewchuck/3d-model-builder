@@ -1,5 +1,7 @@
 import itertools
 
+import numpy as np
+
 import pytest
 
 from modelbuilder.templates import CurvedReturnTemplate
@@ -59,3 +61,31 @@ def test_ball_sizes_build(tmpl, ball, tmp_path):
     r = tmpl.build(tmpl.defaults() | {"ball_diameter": ball})
     assert all(len(p.solid.decompose()) == 1 for p in r.print_parts)
     write_3mf(str(tmp_path / "x.3mf"), [p.to_mesh() for p in r.print_parts])
+
+
+def _steep_overhangs(solid):
+    from modelbuilder.templates.base import Part
+
+    m = Part("x", solid).to_mesh()
+    tris = m.vertices[m.triangles]
+    n = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    n = n / np.linalg.norm(n, axis=1, keepdims=True)
+    # Faces pointing down steeper than 45 degrees that are not resting on the plate.
+    return tris[(n[:, 2] < -0.71) & (tris[:, :, 2].min(axis=1) > 0.2)]
+
+
+@pytest.mark.parametrize("angle", [45, 70, 90])
+def test_prints_without_supports(tmpl, angle):
+    r = tmpl.build(tmpl.defaults() | {"bend_angle": angle})
+    for p in r.print_parts:
+        bad = _steep_overhangs(p.solid)
+        if len(bad):
+            # Only short bridges (slot and tie-hole tops) are allowed.
+            extent = (bad[:, :, :2].max(axis=1) - bad[:, :, :2].min(axis=1)).max()
+            assert extent <= 10.5, f"{p.name}: {extent:.1f} mm unsupported span"
+
+
+@pytest.mark.parametrize("angle", [30, 60, 90])
+def test_bend_angles_build_one_piece(tmpl, angle):
+    r = tmpl.build(tmpl.defaults() | {"bend_angle": angle})
+    assert len(r.print_parts[0].solid.decompose()) == 1

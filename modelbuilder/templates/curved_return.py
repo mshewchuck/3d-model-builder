@@ -1,7 +1,7 @@
 """Curved ball return in the style of store-bought hoop returns.
 
 Parts (all print with no supports):
-* Chute: a trough that bends 90 degrees, with a flat floor on the outside of
+* Chute: a trough that bends (70 degrees by default, so the exit runs downhill), with a flat floor on the outside of
   the bend and two lips flared at 45 degrees. It prints lying on one lip, so
   the 45 degree lips and short window bridges need no supports. Floor slots
   and lip windows keep it light and give it the open-frame look.
@@ -61,6 +61,8 @@ class CurvedReturnTemplate(Template):
               help="Inside diameter of the catch ring. A bit bigger than the bottom of your net."),
         Param("bend_radius", "Bend radius", 90, 50, 200,
               help="Radius of the chute's floor through the turn. Bigger turns more smoothly but is bigger to print."),
+        Param("bend_angle", "Bend angle", 70, 30, 90, unit="deg",
+              help="How far the chute turns from straight down. 70 means the exit slopes 20 degrees downhill toward you."),
         Param("lead_in", "Straight section at top", 25, 10, 100),
         Param("exit_length", "Straight exit length", 50, 0, 150,
               help="Flat run after the turn that points the ball back at you."),
@@ -83,53 +85,57 @@ class CurvedReturnTemplate(Template):
         top = a + wf  # z of the floor's upper inner edge
         height = top + d + s
 
-        floor = _poly([(rf, a - s), (rf + t, a - s), (rf + t, top + s), (rf, top + s)])
+        floor = _poly([(rf, a), (rf + t, a), (rf + t, top + s), (rf, top + s)])
         lo_lip = _poly([(rf, a), (rf - d, a - d), (rf - d + s, a - d - s), (rf + s, a - s)])
         hi_lip = _poly([(rf, top), (rf + s, top + s), (rf - d + s, top + d + s), (rf - d, top + d)])
-        corners = _poly([(rf, a), (rf + s, a - s), (rf + t, a - s), (rf + t, a)]) + _poly(
+        # Lower corner is chamfered at 45 degrees so nothing overhangs flat while printing.
+        corners = _poly([(rf, a), (rf + s, a - s), (rf + t, a - s + (t - s)), (rf + t, a)]) + _poly(
             [(rf, top), (rf + t, top), (rf + t, top + s), (rf + s, top + s)]
         )
         profile = floor + lo_lip + hi_lip + corners
 
-        bend = Manifold.revolve(profile, SEG, 90)
-        lead = Manifold.extrude(profile, v["lead_in"]).transform(
+        angle = v["bend_angle"]
+        bend = Manifold.revolve(profile, SEG, angle)
+        lead = Manifold.extrude(profile, v["lead_in"] + 0.5).translate([0, 0, -0.5]).transform(
             [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]]
         )  # runs along -Y from the start of the bend
         chute = bend + lead
         exit_len = v["exit_length"]
         if exit_len > 0:
-            ext = Manifold.extrude(profile, exit_len).translate([0, 0, -exit_len]).transform(
-                [[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0]]
-            )  # runs along -X from the end of the bend
-            chute = chute + ext
+            ext = Manifold.extrude(profile, exit_len + 0.5)  # 0.5 mm overlap fuses it to the bend
+            chute = chute + self._exit(ext, exit_len, angle)
 
         # Floor slots across the path (8 mm wide, so the ball rolls straight over them).
         m = 7.0
         floor_cut = _poly([(rf - 1, a + m), (rf + t + 1, a + m), (rf + t + 1, top - m), (rf - 1, top - m)])
         slot_deg = math.degrees(8.0 / rf)
         pitch_deg = math.degrees(18.0 / rf)
-        n = int((90 - 2 * pitch_deg) // pitch_deg)
-        start = (90 - (n - 1) * pitch_deg - slot_deg) / 2
+        n = max(0, int((angle - 2 * pitch_deg) // pitch_deg) + 1)
+        start = (angle - (n - 1) * pitch_deg - slot_deg) / 2
         slot = Manifold.revolve(floor_cut, 8, slot_deg)
         for i in range(n):
             chute = chute - slot.rotate([0, 0, start + i * pitch_deg])
 
-        # Windows in the lips (the open-frame look). Lips are 45 degrees, so no supports.
+        # Slots in the lips (the open-frame look). 10 mm wide, so the print only bridges 10 mm.
         m2 = 7.0
         lip_cut = _poly([(rf - d + m2, -1), (rf - m2, -1), (rf - m2, a), (rf - d + m2, a)]) + _poly(
             [(rf - d + m2, top), (rf - m2, top), (rf - m2, height + 1), (rf - d + m2, height + 1)]
         )
         r_mid = rf - d / 2
-        win_deg = math.degrees(22.0 / r_mid)
-        wpitch = math.degrees(34.0 / r_mid)
-        nw = max(1, int((90 - 10) // wpitch))
-        wstart = (90 - (nw - 1) * wpitch - win_deg) / 2
-        window = Manifold.revolve(lip_cut, 16, win_deg)
+        win_deg = math.degrees(10.0 / r_mid)
+        wpitch = math.degrees(20.0 / r_mid)
+        nw = max(1, int((angle - 2 * wpitch) // wpitch) + 1)
+        wstart = (angle - (nw - 1) * wpitch - win_deg) / 2
+        window = Manifold.revolve(lip_cut, 8, win_deg)
         for i in range(nw):
             chute = chute - window.rotate([0, 0, wstart + i * wpitch])
-        if exit_len >= 40:  # one window and floor slot pair in the straight exit
-            straight_lip = Manifold.extrude(lip_cut, exit_len - 20).translate([0, 0, -(exit_len - 10)])
-            chute = chute - straight_lip.transform([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0]])
+        # Matching slots along the straight exit (lips and floor).
+        cut = lip_cut + floor_cut
+        pos = 10.0
+        while pos + 10 <= exit_len - 8:
+            piece = Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)])
+            chute = chute - self._exit(piece, 0, angle)
+            pos += 20.0
 
         # Zip-tie holes near the top of the lead-in: one through the floor, one through each lip.
         y_tie = -(v["lead_in"] - 6)
@@ -146,6 +152,15 @@ class CurvedReturnTemplate(Template):
         geo = dict(t=t, d=d, wf=wf, rf=rf, a=a, top=top, zc=zc, height=height, y_tie=y_tie,
                    ties=tie_pts_print)
         return chute, geo
+
+    @staticmethod
+    def _exit(m: Manifold, length: float, angle: float) -> Manifold:
+        """Place an extrusion (local w in [0, length], or already shifted negative) on the tangent
+        leaving the end of the bend, which sits at `angle` degrees around Z."""
+        if length:
+            m = m.translate([0, 0, -length])
+        m = m.transform([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0]])  # tangent exit at 90 deg
+        return m.rotate([0, 0, angle - 90])
 
     @staticmethod
     def _to_installed(m: Manifold, zc: float) -> Manifold:
@@ -228,11 +243,16 @@ class CurvedReturnTemplate(Template):
             assembled.append(Part("Hook", hk, HOOK_COLOR))
 
         bed = v["bed_size"]
-        print_parts, one_plate = pack_on_plate(
-            [Part("Chute", chute, CHUTE_COLOR), Part("Ring", ring, RING_COLOR)]
-            + [Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)],
-            bed,
-        )
+        others = [Part("Ring", ring, RING_COLOR)] + [
+            Part(f"Hook {i + 1}", hook, HOOK_COLOR) for i in range(4)
+        ]
+        # Spin the chute flat on the plate until everything packs onto one plate.
+        for spin in range(0, 180, 10):
+            print_parts, one_plate = pack_on_plate(
+                [Part("Chute", chute.rotate([0, 0, spin]), CHUTE_COLOR)] + others, bed
+            )
+            if one_plate:
+                break
 
         notes = []
         if not one_plate:
@@ -244,8 +264,9 @@ class CurvedReturnTemplate(Template):
                 notes.append(f"Warning: the {p.name.lower()} is {sx:.0f} x {sy:.0f} x {sz:.0f} mm, "
                              f"larger than your {bed:.0f} mm bed. Reduce the bend radius or ring opening.")
         notes.append(
-            "Bambu Studio: no supports needed. The chute stands on the edge of one lip, so keep the "
-            "brim on (Auto) for grip. PETG or PLA."
+            "Bambu Studio: supports OFF. The chute prints lying on its side (the curve flat on the "
+            "plate): walls are vertical or 45 degrees and slots bridge 10 mm at most. Its lower lip "
+            "edge is all that touches the plate, so set Brim to Outer only (about 5 mm). PETG or PLA."
         )
         notes.append(
             "Assembly: set the ring on top of the chute and fasten it with 3 small zip ties through "

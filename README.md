@@ -13,11 +13,24 @@ windows, and comes back out toward you. It's sized for a 67 mm mini airless ball
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute: a 90° curved trough with a flat floor, 45° lips, floor slots and lip windows | 1 | On the edge of one lip. No supports, keep the brim on |
+| Chute: a curved trough (70° bend by default) with a flat floor, 45° lips, and slots in the floor and lips | 1 | Lying on its side. No supports, Brim set to Outer only |
 | Ring: a flat catch collar with cord holes and zip-tie holes | 1 | Flat |
 | Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-All six parts fit on one 256 mm Bambu plate and use about 78 cm³ of plastic.
+All six parts fit on one 256 mm Bambu plate and use about 70 cm³ of plastic.
+
+### Printing without supports
+
+Print the chute lying on its side, with the curve flat on the plate and the edge of one
+lip touching the plate.
+- The floor is a vertical wall and the two lips lean at 45°, which is within the range a
+  printer handles on its own.
+- The floor and lip slots are cut across the chute's path, so their tops bridge 10 mm at
+  most. The zip-tie holes bridge 4 mm.
+- A test (`test_prints_without_supports`) scans the mesh and fails if any surface
+  overhangs past 45° over a longer span.
+- Only the thin lip edge touches the plate, so set **Brim** to *Outer only* (about 5 mm)
+  in Bambu Studio for grip. Turn supports **off**.
 
 **Assembly:** set the ring on top of the chute and fasten it with 3 small zip ties through
 the matching holes. Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the

@@ -40,7 +40,7 @@ def test_oversize_settings_warn():
 def test_validation_rejects_out_of_range():
     t = BallReturnTemplate()
     assert t.validate(t.defaults()) == []
-    assert t.validate(t.defaults() | {"slope_deg": 80})
+    assert t.validate(t.defaults() | {"rail_height": 500})
 
 
 @pytest.mark.parametrize("ball", [127, 178])
@@ -70,3 +70,13 @@ def test_3mf_package_is_valid(result, tmp_path):
 
 def test_registry_has_templates():
     assert TEMPLATES and all(t.params for t in TEMPLATES)
+
+
+def test_single_part_and_light():
+    t = BallReturnTemplate()
+    r = t.build(t.defaults())
+    assert len(r.print_parts) == 1
+    solid = r.print_parts[0].solid
+    without = t.build(t.defaults() | {"cutouts": 0}).print_parts[0].solid
+    assert solid.volume() < 0.8 * without.volume()
+    assert solid.volume() < 100_000  # under 100 cm^3 of plastic

@@ -7,27 +7,20 @@ Pick a template, type your dimensions, check the 3D preview, click **Export .3mf
 
 ## Template: Mini hoop ball return
 
-A chute that hangs under a mini basketball hoop's net and rolls the ball back to you.
+One flat tray: a thin floor with low side rails and a back stop. It hangs under
+the net with zip ties and rolls the ball back to you.
 
-| Part | Qty | How it prints |
-|------|-----|---------------|
-| Chute (half-pipe with a closed back and two mounting fins) | 1 | Stands on its closed end. Turn on supports (tree, build plate only) for the fins |
-| Hanger (snaps onto the rim tube) | 2 | Flat, no supports |
-
-**Hardware:** 4× M4 × 20 mm bolts and nuts.
+- **One part.** It prints floor-down with **no supports** and no bolts. That's about 72 cm³ of plastic with the default settings.
+- **Floor cutouts** are slots that run the same way the ball rolls, so it rides on the ribs. They save about a third of the plastic and can be turned off.
+- **Four zip-tie slots** sit in the corners. Tie the back slots up near the bottom of the net and the front slots a little lower, so the tray slopes toward you.
 
 ### What to measure
 
 | Setting | How to measure |
 |---------|----------------|
 | Ball diameter | Mini balls are usually 5″ (127 mm) or 7″ (178 mm) |
-| Rim inside diameter | Across the inside of the rim |
-| Rim tube diameter | Thickness of the rim's metal tube. Use calipers if you can |
-| Rim to chute height | Must be longer than the net so the ball drops through first |
+| Tray length | Keep it under your bed size |
 | Printer bed size | 256 for X1/P1/P2, 180 for the A1 mini |
-
-Tip: print one hanger first to check the clip fits your rim before printing the chute.
-PETG is a good material choice because it flexes a little for the snap clip.
 
 ## Running it
 
@@ -42,7 +35,7 @@ Command-line use (no window):
 
 ```bash
 python -m modelbuilder --cli --list
-python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=127 rim_drop=180
+python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=127 length=180
 ```
 
 ### Prebuilt app

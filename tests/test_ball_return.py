@@ -33,7 +33,7 @@ def test_defaults_fit_bambu_plate(result):
 
 def test_oversize_settings_warn():
     t = BallReturnTemplate()
-    v = t.defaults() | {"ball_diameter": 240, "clearance": 25, "bed_size": 180}
+    v = t.defaults() | {"length": 250, "bed_size": 180}
     assert any(n.startswith("Warning") for n in t.build(v).notes)
 
 
@@ -43,7 +43,7 @@ def test_validation_rejects_out_of_range():
     assert t.validate(t.defaults() | {"rail_height": 500})
 
 
-@pytest.mark.parametrize("ball", [127, 178])
+@pytest.mark.parametrize("ball", [67, 127, 178])
 def test_common_ball_sizes_build(ball):
     t = BallReturnTemplate()
     r = t.build(t.defaults() | {"ball_diameter": ball})

@@ -10,15 +10,15 @@ Pick a template, type your dimensions, check the 3D preview, click **Export .3mf
 One flat tray: a thin floor with low side rails and a back stop. It hangs under
 the net with zip ties and rolls the ball back to you.
 
-- **One part.** It prints floor-down with **no supports** and no bolts. That's about 72 cm³ of plastic with the default settings.
-- **Floor cutouts** are slots that run the same way the ball rolls, so it rides on the ribs. They save about a third of the plastic and can be turned off.
+- **One part.** It prints floor-down with **no supports** and no bolts. The default settings are sized for a mini airless ball about the size of a tennis ball (67 mm).
+- **Floor cutouts** are slots that run the same way the ball rolls, so it rides on the ribs. They save about a quarter of the plastic and can be turned off.
 - **Four zip-tie slots** sit in the corners. Tie the back slots up near the bottom of the net and the front slots a little lower, so the tray slopes toward you.
 
 ### What to measure
 
 | Setting | How to measure |
 |---------|----------------|
-| Ball diameter | Mini balls are usually 5″ (127 mm) or 7″ (178 mm) |
+| Ball diameter | Defaults to 67 mm (tennis-ball size). Measure yours |
 | Tray length | Keep it under your bed size |
 | Printer bed size | 256 for X1/P1/P2, 180 for the A1 mini |
 

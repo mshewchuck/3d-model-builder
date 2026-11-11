@@ -24,18 +24,18 @@ class BallReturnTemplate(Template):
         "back to you. Prints flat with no supports."
     )
     params = [
-        Param("ball_diameter", "Ball diameter", 130, 60, 250,
-              help="Mini balls are usually 5 in (127 mm) or 7 in (178 mm)."),
-        Param("clearance", "Ball clearance (each side)", 8, 2, 30,
+        Param("ball_diameter", "Ball diameter", 67, 40, 250,
+              help="Mini airless / tennis-ball size is about 65-70 mm. Measure yours."),
+        Param("clearance", "Ball clearance (each side)", 6, 2, 30,
               help="Extra room so the ball rolls freely between the rails."),
-        Param("length", "Tray length", 200, 100, 400,
-              help="Keep it under your bed size."),
-        Param("rail_height", "Side rail height", 25, 10, 60,
+        Param("length", "Tray length", 170, 100, 400,
+              help="170 mm fits every Bambu printer, including the A1 mini."),
+        Param("rail_height", "Side rail height", 20, 10, 60,
               help="Low rails keep the ball on track and save plastic."),
         Param("floor", "Floor thickness", 2.4, 1.2, 6),
         Param("wall", "Rail thickness", 2.0, 1.2, 6),
         Param("cutouts", "Floor cutouts (1 = on, 0 = off)", 1, 0, 1, unit="",
-              help="Slots in the floor along the rolling direction. Saves about a third of the plastic."),
+              help="Slots in the floor along the rolling direction. Saves about a quarter of the plastic."),
         Param("bed_size", "Printer bed size", 256, 150, 400,
               help="256 for Bambu X1/P1/P2, 180 for the A1 mini."),
     ]
@@ -52,9 +52,9 @@ class BallReturnTemplate(Template):
         tray = tray + Manifold.cube([wall, width, rail_h])  # back stop
 
         # Lightening slots run along the rolling direction so the ball rides the ribs.
-        margin = 15.0
+        margin = 10.0
         if v["cutouts"] >= 0.5:
-            slot_w, rib = 10.0, 10.0
+            slot_w, rib = 8.0, 8.0
             span = inner_w - 2 * margin
             count = int((span + rib) // (slot_w + rib))
             if count > 0:

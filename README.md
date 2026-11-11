@@ -15,11 +15,11 @@ ball by default.
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute half: one side of a curved U-channel (65° bend, 35 mm rounded spout): a flat side panel with windows, half of the slotted floor, and joining ears | 2 (identical) | Flat on its side panel, about 47 mm tall. No supports |
+| Chute: a curved U-channel (65° bend, 35 mm rounded spout) with flat side panels with windows, a slotted floor, and joining ears along the back | 1, which you cut into 2 identical halves in the slicer | Exported lying on a side panel, 94 mm tall. Cut it flat at Z = 47 mm, so each half lies on its side panel. No supports |
 | Hanger: a cap over the rim block, a spine down the backboard, and a short screw block with support triangles | 1 | Lying on its backboard side. No supports |
 
-All three parts fit on one 256 mm Bambu plate and use about 94 cm³ of plastic, about 117 g
-of PLA.
+Everything fits on one 256 mm plate, or on two plates on an A1 mini. It uses about 92 cm³
+of plastic, about 114 g of PLA.
 
 **The curve sizes itself:** leave "Bend radius" at 0 (automatic). The app then picks the
 smallest curve that still has floor under the ball where it drops (the rim centre).
@@ -31,7 +31,12 @@ smallest curve that still has floor under the ball where it drops (the rim centr
 
 ### Printing without supports
 
-- **Chute:** it's split down the middle of its floor into two identical halves.
+**Splitting the chute in Bambu Studio:** select the chute, open the **Cut** tool, and set a
+flat cut at **Z = 47 mm**. That's exactly half its height, along the middle of the floor.
+Turn on the option to flip the upper part so it lies on its side panel. You get two
+identical halves.
+
+- **Chute:** after the cut, you have two identical halves.
   - Each half lies flat on its side panel, so the whole panel is the first layer.
   - The floor slots bridge 10 mm, and the joining ears have 45° undersides.
 - **Hanger:** it lies on the side that faces the backboard.

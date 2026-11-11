@@ -1,9 +1,10 @@
 """Curved ball return in the style of store-bought hoop returns.
 
 Parts (all print with no supports):
-* Chute, in two identical halves: a U channel that bends (70 degrees by default, so the exit runs
-  downhill) with a slotted floor, flat side panels with windows, and a rounded spout. Each half
-  prints lying flat on its side panel. Ears along the back join the halves.
+* Chute: a U channel that bends (65 degrees by default, so the exit runs downhill) with a
+  slotted floor, flat side panels with windows, and a rounded spout. It is exported as one part
+  lying on a side panel; cut it in half in the slicer (a flat cut at half its height) and each
+  half prints flat on its side panel. Ears along the back join the halves again.
 * Hanger: caps the block where the rim joins the backboard, runs down the board as a spine,
   and ends in a short block (with support triangles) that the back of the chute screws to.
   Prints lying on its backboard side.
@@ -84,7 +85,7 @@ class CurvedReturnTemplate(Template):
         Param("rim_diameter", "Rim inside diameter", 150, 80, 400,
               help="Across the inside of the rim. Used to check the spout doesn't stick out past "
                    "the front of the rim."),
-        Param("drop", "Block to chute drop", 170, 60, 400,
+        Param("drop", "Block to chute drop", 100, 40, 400,
               help="From the bottom of the rim block down to the top of the chute. Make it longer "
                    "than the net so the ball falls out of the net first."),
         Param("bed_size", "Printer bed size", 256, 150, 400,
@@ -312,12 +313,13 @@ class CurvedReturnTemplate(Template):
 
         bed = v["bed_size"]
         best = None
+        # The chute goes out as ONE part lying on a side panel. Cut it in Bambu Studio with a flat
+        # cut at half its height to get the two identical halves.
         for spin in range(0, 180, 15):  # try turning the parts on the plate
-            h = half.rotate([0, 0, spin])
+            c = chute.rotate([0, 0, spin])
             for hspin in (0, 90):
                 hg = hanger.rotate([0, -90, 0]).rotate([0, 0, hspin])  # backboard side down
-                result = pack_plates([Part("Chute half A", h, CHUTE_COLOR),
-                                      Part("Chute half B", h, CHUTE_COLOR),
+                result = pack_plates([Part("Chute", c, CHUTE_COLOR),
                                       Part("Hanger", hg, HANGER_COLOR)], bed)
                 if best is None or result[1] < best[1]:
                     best = result
@@ -356,8 +358,10 @@ class CurvedReturnTemplate(Template):
             notes.append(f"The spout reaches {tip:.0f} mm out from the backboard, "
                          f"{rim_front - tip:.0f} mm inside the front of the rim.")
         notes.append(
-            "Bambu Studio: supports OFF. The chute is two identical halves, each lying flat on its "
-            "side panel. The hanger lies on its backboard side. PETG or PLA."
+            f"Bambu Studio: the chute comes in as one part lying on a side panel. Split it with the "
+            f"Cut tool at Z = {geo['zc']:.1f} mm, which is exactly half its height. Flip the upper "
+            "part so both halves lie on their side panels. Then supports OFF. The hanger lies on "
+            "its backboard side. PETG or PLA."
         )
         notes.append(
             "Joining the halves: put them together floor to floor. The 6 ears along the back pair "

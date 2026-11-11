@@ -25,7 +25,7 @@ def _assembled(result):
 
 def test_parts(result):
     names = [p.name for p in result.print_parts]
-    assert names == ["Chute half A", "Chute half B", "Hanger"]
+    assert names == ["Chute", "Hanger"]
     for p in result.print_parts:
         assert len(p.solid.decompose()) == 1, p.name
 
@@ -43,14 +43,11 @@ def test_defaults_fit_one_plate_without_overlap(result):
 def test_small_bed_uses_more_plates(tmpl):
     r = tmpl.build(tmpl.defaults() | {"bed_size": 180})
     assert any(n.startswith("Needs") for n in r.notes)
-    # The hanger (about 197 mm long) cannot fit a 180 mm bed at the default drop: warn about it.
-    assert any(n.startswith("Warning: the hanger") for n in r.notes)
+    assert not any(n.startswith("Warning") for n in r.notes)  # every part fits a 180 mm bed
     for a, b in itertools.combinations(r.print_parts, 2):
         assert (a.solid ^ b.solid).volume() == pytest.approx(0, abs=1e-6)
     pitch = 180 + PLATE_SPACING
     for p in r.print_parts:
-        if p.name == "Hanger":
-            continue
         b = p.solid.bounding_box()
         x0 = int(b[0] // pitch) * pitch
         assert b[3] <= x0 + 180 and b[4] <= 180, p.name
@@ -86,10 +83,36 @@ def _steep_overhangs(solid):
     return tris[(n[:, 2] < -0.71) & (tris[:, :, 2].min(axis=1) > 0.2)]
 
 
+def _cut_chute(tmpl, r):
+    """Do what the user does in the slicer: cut the exported chute at half its height and flip
+    the upper piece onto its side panel. Returns the two pieces as printed."""
+    chute = next(p.solid for p in r.print_parts if p.name == "Chute")
+    zc = chute.bounding_box()[5] / 2
+    lower, upper = chute.split_by_plane([0, 0, 1], zc)  # (above, below) order checked below
+    if lower.bounding_box()[2] > 1:
+        lower, upper = upper, lower
+    b = upper.bounding_box()
+    upper = upper.mirror([0, 0, 1]).translate([0, 0, b[5]])
+    return lower, upper
+
+
+def test_chute_cuts_into_two_identical_flat_halves(tmpl, result):
+    lower, upper = _cut_chute(tmpl, result)
+    v = tmpl.defaults()
+    half, _, _ = tmpl._chute(v | {"bend_radius": tmpl.auto_bend_radius(v)})
+    for piece in (lower, upper):
+        assert len(piece.decompose()) == 1
+        assert piece.bounding_box()[2] == pytest.approx(0, abs=1e-6)
+        assert piece.volume() == pytest.approx(half.volume(), rel=1e-3)
+        assert piece.slice(0.1).area() > 3000  # lies on its whole side panel
+
+
 @pytest.mark.parametrize("angle", [45, 70, 90])
 def test_prints_without_supports(tmpl, angle):
     r = tmpl.build(tmpl.defaults() | {"bend_angle": angle})
-    for p in r.print_parts:
+    pieces = [Part(f"Chute half {i}", p) for i, p in enumerate(_cut_chute(tmpl, r))]
+    pieces += [p for p in r.print_parts if p.name != "Chute"]
+    for p in pieces:
         bad = _steep_overhangs(p.solid)
         if len(bad):
             # A slicer bridges each flat overhang across its short side, so the bridge length is

@@ -143,12 +143,12 @@ def test_hanger_caps_block_and_meets_chute(tmpl, result):
     assert hanger.min_gap(block, 2) == pytest.approx(0.4, abs=0.05)  # snug cap
     assert (hanger ^ chute).volume() == pytest.approx(0, abs=1e-3)
     assert hanger.min_gap(chute, 1) < 0.01  # block sits flat on the back of the chute
-    # The chute floor stands off the backboard by the set gap (its joining ears, 6 mm deep,
-    # sit a little closer) and nothing touches the board except the hanger.
+    # The chute floor stands off the backboard by the set gap; only the slim 3 mm glue bead
+    # sits behind it (no bulky joining ears).
     board_x = a["Backboard"].bounding_box()[3]
     x_floor = -(tmpl.auto_bend_radius(v) + v["wall"])
     assert x_floor - board_x == pytest.approx(v["standoff"], abs=0.01)
-    assert chute.bounding_box()[0] - board_x > v["standoff"] - 6.5
+    assert chute.bounding_box()[0] - board_x > v["standoff"] - 3.5
 
 
 def test_screws_go_through_chute_into_block(tmpl, result):

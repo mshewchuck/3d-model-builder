@@ -15,11 +15,11 @@ ball by default.
 
 | Part | Qty | How it prints |
 |------|-----|---------------|
-| Chute: a curved U-channel (65° bend, 35 mm rounded spout) with flat side panels with windows, a slotted floor, and joining ears along the back | 1, which you cut into 2 identical halves in the slicer | Exported lying on a side panel, 94 mm tall. Cut it flat at Z = 47 mm, so each half lies on its side panel. No supports |
+| Chute: a curved U-channel (65° bend, 35 mm rounded spout) with flat side panels with windows, a slotted floor, and a slim glue bead along the back seam | 1, which you cut into 2 identical halves in the slicer | Exported lying on a side panel, 94 mm tall. Cut it flat at Z = 47 mm, so each half lies on its side panel. No supports |
 | Hanger: a cap over the rim block, a spine down the backboard, and a short screw block with support triangles | 1 | Lying on its backboard side. No supports |
 
 Everything fits on one 256 mm plate, or on two plates on an A1 mini. It uses about 92 cm³
-of plastic, about 114 g of PLA.
+of plastic, about 108 g of PLA.
 
 **The curve sizes itself:** leave "Bend radius" at 0 (automatic). The app then picks the
 smallest curve that still has floor under the ball where it drops (the rim centre).
@@ -38,7 +38,7 @@ identical halves.
 
 - **Chute:** after the cut, you have two identical halves.
   - Each half lies flat on its side panel, so the whole panel is the first layer.
-  - The floor slots bridge 10 mm, and the joining ears have 45° undersides.
+  - The floor slots bridge 10 mm, and the glue bead has a 45° underside.
 - **Hanger:** it lies on the side that faces the backboard.
   - The screw block and support triangles rise straight up from the plate.
   - Its two lightening pockets have 10 mm roofs.
@@ -46,8 +46,10 @@ identical halves.
 
 ### Assembly
 
-1. **Join the halves:** put them together floor to floor. Six ears along the back pair up.
-   Fasten each pair with an M3 × 20 mm screw and nut, or a small zip tie.
+1. **Join the halves:** push three short pieces of 1.75 mm filament, about 6 mm long, into
+   the pin holes along the seam. Then glue the halves floor to floor: CA (super) glue for
+   PLA, or a plastic cement for PETG. Put glue along the floor edge and the slim bead on the
+   back. The hanger's screws also clamp both halves together at the top.
 2. **Hang it:** press the hanger's cap down over the block where the rim meets the backboard.
    The cap is a snug fit with 0.4 mm of clearance.
 3. **Screw on the chute:** fix the top of the chute to the hanger's block with 4 M3 × 16 mm

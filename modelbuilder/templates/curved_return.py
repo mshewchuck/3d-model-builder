@@ -4,7 +4,7 @@ Parts (all print with no supports):
 * Chute: a U channel that bends (65 degrees by default, so the exit runs downhill) with a
   slotted floor, flat side panels with windows, and a rounded spout. It is exported as one part
   lying on a side panel; cut it in half in the slicer (a flat cut at half its height) and each
-  half prints flat on its side panel. Ears along the back join the halves again.
+  half prints flat on its side panel. A slim glue bead and filament pins rejoin the halves.
 * Hanger: caps the block where the rim joins the backboard, runs down the board as a spine,
   and ends in a short block (with support triangles) that the back of the chute screws to.
   Prints lying on its backboard side.
@@ -26,9 +26,9 @@ SEG = 96
 CHUTE_COLOR = "#5b5f66"
 HANGER_COLOR = "#2b2b2b"
 SIDE_CLEARANCE = 5.0  # room each side of the ball between the side panels
-EAR = 6.0  # how far the joining ears stick out behind the floor
-EAR_W = 12.0  # ear width along the chute
-EAR_HOLE_R = 1.7  # M3 screw or a small zip tie
+BEAD = 3.0  # glue bead along the back seam (sticks out this far behind the floor)
+PIN_R = 0.95  # holes for 1.75 mm filament alignment pins
+PIN_DEPTH = 3.0  # per half
 SCREW_R = 1.7  # M3
 # Hanger: caps the block where the rim meets the backboard.
 CAP_FIT = 0.4  # clearance around the block
@@ -156,28 +156,20 @@ class CurvedReturnTemplate(Template):
             half = half - self._exit(Manifold.extrude(cut, 10.0).translate([0, 0, -(pos + 10)]), 0, angle)
             pos += 16.0
 
-        # Ears along the back: each half has a matching ear; bolt or zip-tie them together.
-        ear_prof = _poly([(rf + t - 0.3, zc - 12), (rf + t + EAR, zc - 12 + EAR + 0.3), (rf + t + EAR, zc),
-                          (rf + t - 0.3, zc)])  # 45 degree underside, so it prints unsupported
-        r_hole = rf + t + EAR / 2 + 0.5
-        ear_deg = math.degrees(EAR_W / (rf + t))
-        for frac in (0.1, 0.3, 0.5, 0.7, 0.9):
-            a0 = angle * frac - ear_deg / 2
-            ear = Manifold.revolve(ear_prof, 8, ear_deg).rotate([0, 0, a0])
-            ac = math.radians(angle * frac)
-            hole = Manifold.cylinder(20, EAR_HOLE_R, circular_segments=16).translate(
-                [r_hole * math.cos(ac), r_hole * math.sin(ac), zc - 15])
-            half = half + ear - hole
-
-        def straight_ear(place, w_c):
-            e = Manifold.extrude(ear_prof, EAR_W).translate([0, 0, -EAR_W / 2])
-            h = Manifold.cylinder(20, EAR_HOLE_R, circular_segments=16).rotate([-90, 0, 0])
-            h = h.translate([r_hole, zc - 15, 0])
-            return place((e - h).translate([0, 0, w_c]))
-
-        # (No ear on the lead-in: the hanger's block screws across both halves there.)
-        if exit_len - rc >= EAR_W + 4:
-            half = half + self._exit(straight_ear(lambda m: m, -(exit_len - rc) / 2), 0, angle)
+        # Slim glue bead along the back seam (half of it on each half): a 45 degree triangle,
+        # so it prints unsupported. Holes for 1.75 mm filament pins line the halves up.
+        bead = _poly([(rf + t - 0.3, zc - BEAD - 0.3), (rf + t + BEAD, zc), (rf + t - 0.3, zc)])
+        half = half + Manifold.revolve(bead, SEG, angle)
+        lead_bead = lead_len - BLOCK_H - 1  # stop below the hanger's block
+        if lead_bead > 0:
+            half = half + along_lead(Manifold.extrude(bead, lead_bead + 0.5).translate([0, 0, -0.5]))
+        if exit_len > 0:
+            half = half + self._exit(Manifold.extrude(bead, exit_len + 0.5), exit_len, angle)
+        r_pin = rf + t + 0.3
+        pin = Manifold.cylinder(PIN_DEPTH + 1, PIN_R, circular_segments=16)
+        for frac in (0.15, 0.5, 0.85):
+            a = math.radians(angle * frac)
+            half = half - pin.translate([r_pin * math.cos(a), r_pin * math.sin(a), zc - PIN_DEPTH])
 
         # Screw holes through the floor near the top: the hanger's block screws on here
         # (two M3 per half, 4 in all).
@@ -364,8 +356,10 @@ class CurvedReturnTemplate(Template):
             "its backboard side. PETG or PLA."
         )
         notes.append(
-            "Joining the halves: put them together floor to floor. The 6 ears along the back pair "
-            "up. Put an M3 x 20 mm screw and nut, or a small zip tie, through each pair."
+            "Joining the halves: push three short pieces of 1.75 mm filament (about 6 mm long) into "
+            "the pin holes along the seam, then glue the halves floor to floor. Use CA (super) glue "
+            "for PLA, or a plastic cement for PETG, along the floor edge and the bead on the back. "
+            "The hanger's 4 screws also clamp both halves together at the top."
         )
         notes.append(
             "Hanging: press the hanger's cap down over the block where the rim joins the "

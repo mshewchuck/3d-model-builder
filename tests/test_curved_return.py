@@ -50,7 +50,7 @@ def _collides(a, b):
 
 def test_swivel_prints_with_clearance_and_cannot_fall_out(tmpl):
     inner, outer, _ = _swivel_parts(tmpl)
-    assert inner.min_gap(outer, 5) >= 0.44  # print-in-place gap
+    assert inner.min_gap(outer, 5) >= 0.49  # print-in-place gap
     assert not _collides(inner.translate([0, 0, 1.0]), outer)  # lifts to clear the clicks
     assert _collides(inner.translate([0, 0, 1.5]), outer)  # but is captured
     assert _collides(inner.translate([0, 0, -1.5]), outer)

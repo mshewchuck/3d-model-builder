@@ -34,7 +34,7 @@ TIE_HOLE_R = 1.8
 # Swivel (print-in-place): the inner ring (chute tied to it) and the outer ring (hangs from the
 # cords) print nested together. A 45 degree ridge on the inner ring runs in a groove in the outer
 # ring, so it prints without supports and comes off the plate already able to turn.
-SWIVEL_GAP = 0.45  # clearance all round the ridge as printed
+SWIVEL_GAP = 0.5  # clearance all round the ridge as printed
 SWIVEL_LIFT = 1.0  # extra vertical room in the groove, so the ring can lift over the click bumps
 RIDGE = 1.5  # ridge depth (its faces are 45 degrees)
 RIDGE_Z0 = 1.0  # ridge starts this far above the plate
@@ -401,7 +401,7 @@ class CurvedReturnTemplate(Template):
         if v["swivel"] >= 0.5:
             notes.append(
                 "Swivel ring: prints as ONE part with the inner ring nested inside the outer ring "
-                "(0.45 mm gap). After printing, twist it firmly once to break it free. To aim the "
+                "(0.5 mm gap). After printing, twist it firmly once to break it free. To aim the "
                 "chute, lift it slightly, turn it, and let it settle into the next click. There are "
                 "8 positions, 45 degrees apart. Print it at 0.2 mm layers or finer. Don't scale it in "
                 "the slicer, because that changes the gap."

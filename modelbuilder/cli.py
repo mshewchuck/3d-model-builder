@@ -1,7 +1,7 @@
 """Command-line entry: build a template and write a .3mf without the GUI.
 
 Example:
-    python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=127 length=180
+    python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=67 ring_opening=90
 """
 
 from __future__ import annotations

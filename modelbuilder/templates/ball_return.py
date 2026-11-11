@@ -12,13 +12,13 @@ from __future__ import annotations
 
 from manifold3d import Manifold
 
-from .base import BuildResult, Param, Part, Template, lay_out_on_plate, plate_footprint
+from .base import BuildResult, Param, Part, Template, pack_on_plate, plate_footprint
 
 TIE_SLOT = (4.0, 8.0)  # zip-tie slot size (along X, along Y)
 
 
 class BallReturnTemplate(Template):
-    name = "Mini hoop ball return"
+    name = "Simple flat tray"
     description = (
         "Single flat tray that hangs under a mini hoop's net with zip ties and rolls the ball "
         "back to you. Prints flat with no supports."
@@ -73,7 +73,7 @@ class BallReturnTemplate(Template):
                 tray = tray - Manifold.cube([sx, sy, floor_t + 2]).translate([x, y, -1])
 
         part = Part("Ball return tray", tray, "#e07b39")
-        print_parts = lay_out_on_plate([part])
+        print_parts, _ = pack_on_plate([part], v["bed_size"])
 
         notes = []
         bed = v["bed_size"]

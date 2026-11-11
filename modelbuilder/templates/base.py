@@ -88,3 +88,49 @@ def plate_footprint(parts: list[Part]) -> tuple[float, float, float]:
         ys += [b[1], b[4]]
         zs += [b[2], b[5]]
     return (max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs))
+
+
+def pack_on_plate(parts: list[Part], bed: float, gap: float = 5.0, margin: float = 3.0) -> tuple[list[Part], bool]:
+    """Try a few packing orders and keep the first that fits on one plate."""
+    keys = [
+        lambda p: -p.size()[1],
+        lambda p: -p.size()[0] * p.size()[1],
+        lambda p: -p.size()[0],
+    ]
+    result = None
+    for key in keys:
+        order = sorted(range(len(parts)), key=lambda i: key(parts[i]))
+        result = _shelf_pack(parts, order, bed, gap, margin)
+        if result[1]:
+            return result
+    return result
+
+
+def _shelf_pack(parts, order, bed, gap, margin):
+    """Shelf-pack parts onto a square bed (origin at the plate corner, like Bambu printers).
+
+    Returns the placed parts and whether everything fit on one plate. Parts that do not fit
+    are placed to the right of the plate so Bambu Studio's Arrange can move them to plate 2.
+    """
+    placed: list[Part | None] = [None] * len(parts)
+    x = y = margin
+    row_h = 0.0
+    fits = True
+    overflow_x = bed + 20
+    for i in order:
+        p = parts[i]
+        sx, sy, _ = p.size()
+        if x + sx > bed - margin and x > margin:  # new row
+            x, y = margin, y + row_h + gap
+            row_h = 0.0
+        b = p.solid.bounding_box()
+        if y + sy > bed - margin or sx > bed - 2 * margin:
+            fits = False
+            dest = (overflow_x, margin)
+            overflow_x += sx + gap
+        else:
+            dest = (x, y)
+            x += sx + gap
+            row_h = max(row_h, sy)
+        placed[i] = Part(p.name, p.solid.translate([dest[0] - b[0], dest[1] - b[1], -b[2]]), p.color)
+    return placed, fits

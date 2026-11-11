@@ -5,22 +5,28 @@ for Bambu Studio (also works in OrcaSlicer, PrusaSlicer and Cura).
 
 Pick a template, type your dimensions, check the 3D preview, click **Export .3mf**.
 
-## Template: Mini hoop ball return
+## Template: Curved ball return (store style)
 
-One flat tray: a thin floor with low side rails and a back stop. It hangs under
-the net with zip ties and rolls the ball back to you.
+This one is styled after store-bought hoop returns. A catch ring hangs from the rim on
+4 cords. The ball drops through the net into the ring, rolls down a curved trough with
+windows, and comes back out toward you. It's sized for a 67 mm mini airless ball by default.
 
-- **One part.** It prints floor-down with **no supports** and no bolts. The default settings are sized for a mini airless ball about the size of a tennis ball (67 mm).
-- **Floor cutouts** are slots that run the same way the ball rolls, so it rides on the ribs. They save about a quarter of the plastic and can be turned off.
-- **Four zip-tie slots** sit in the corners. Tie the back slots up near the bottom of the net and the front slots a little lower, so the tray slopes toward you.
+| Part | Qty | How it prints |
+|------|-----|---------------|
+| Chute: a 90° curved trough with a flat floor, 45° lips, floor slots and lip windows | 1 | On the edge of one lip. No supports, keep the brim on |
+| Ring: a flat catch collar with cord holes and zip-tie holes | 1 | Flat |
+| Hooks: J-hooks for the rim tube with an eyelet for cord | 4 | Flat |
 
-### What to measure
+All six parts fit on one 256 mm Bambu plate and use about 78 cm³ of plastic.
 
-| Setting | How to measure |
-|---------|----------------|
-| Ball diameter | Defaults to 67 mm (tennis-ball size). Measure yours |
-| Tray length | Keep it under your bed size |
-| Printer bed size | 256 for X1/P1/P2, 180 for the A1 mini |
+**Assembly:** set the ring on top of the chute and fasten it with 3 small zip ties through
+the matching holes. Tie four 20–30 cm cords from the ring to the hook eyelets. Hang the
+hooks on the rim so the ring sits just under the net.
+
+## Template: Simple flat tray
+
+The lighter alternative is one flat tray: a thin floor with low side rails and a back stop.
+It hangs under the net with 4 zip ties and prints floor-down with no supports.
 
 ## Running it
 
@@ -35,7 +41,7 @@ Command-line use (no window):
 
 ```bash
 python -m modelbuilder --cli --list
-python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=127 length=180
+python -m modelbuilder --cli -o ball_return.3mf --set ball_diameter=67 ring_opening=90
 ```
 
 ### Prebuilt app

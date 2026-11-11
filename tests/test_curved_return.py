@@ -45,6 +45,8 @@ def test_small_bed_uses_more_plates(tmpl):
     assert any(n.startswith("Needs") for n in r.notes)
     # The hanger (about 197 mm long) cannot fit a 180 mm bed at the default drop: warn about it.
     assert any(n.startswith("Warning: the hanger") for n in r.notes)
+    for a, b in itertools.combinations(r.print_parts, 2):
+        assert (a.solid ^ b.solid).volume() == pytest.approx(0, abs=1e-6)
     pitch = 180 + PLATE_SPACING
     for p in r.print_parts:
         if p.name == "Hanger":
@@ -55,7 +57,7 @@ def test_small_bed_uses_more_plates(tmpl):
 
 
 def test_light(result):
-    assert sum(p.solid.volume() for p in result.print_parts) < 95_000  # under 95 cm^3
+    assert sum(p.solid.volume() for p in result.print_parts) < 105_000  # under 105 cm^3
 
 
 def test_ball_fits_channel(tmpl):
@@ -107,24 +109,36 @@ def test_ball_sizes_build(tmpl, ball, tmp_path):
     write_3mf(str(tmp_path / "x.3mf"), [p.to_mesh() for p in r.print_parts])
 
 
-def test_hanger_caps_block_and_meets_chute(tmpl, result):
+def test_hanger_caps_block_and_clamps_chute(result):
     a = _assembled(result)
     hanger, block, chute = a["Hanger"], a["Rim block"], a["Chute"]
     assert (hanger ^ block).volume() == pytest.approx(0, abs=1e-6)
     assert hanger.min_gap(block, 2) == pytest.approx(0.4, abs=0.05)  # snug cap
-    assert (hanger ^ chute).volume() == pytest.approx(0, abs=1e-3)  # touches, never overlaps
-    assert hanger.min_gap(chute, 1) < 0.01  # plate sits flat on the back of the floor
+    assert (hanger ^ chute).volume() == pytest.approx(0, abs=1e-3)
+    assert hanger.min_gap(chute, 2) == pytest.approx(0.3, abs=0.05)  # cheeks hug the side panels
 
 
-def test_screws_pass_through_hanger_and_chute(tmpl, result):
+def test_side_screws_pass_through_cheeks_and_panels(tmpl, result):
     v = tmpl.defaults()
     a = _assembled(result)
-    z = v["lead_in"] - 6
-    x_plate = -(v["bend_radius"] + v["wall"]) - 4
-    for y in (18, -18):
-        rod = Manifold.cylinder(30, 1.2, circular_segments=12).rotate([0, 90, 0]).translate([x_plate - 6.5, y, z])
+    x_floor = -(v["bend_radius"] + v["wall"])
+    z = v["lead_in"] - 12
+    for dx in (8, 19, 30):
+        rod = Manifold.cylinder(160, 1.2, circular_segments=12).rotate([90, 0, 0]).translate([x_floor + dx, 80, z])
         assert (rod ^ a["Hanger"]).volume() == pytest.approx(0, abs=1e-6)
         assert (rod ^ a["Chute"]).volume() == pytest.approx(0, abs=1e-6)
+        # ...and each screw really does pass through both a cheek and a side panel
+        fat = Manifold.cylinder(160, 2.5, circular_segments=12).rotate([90, 0, 0]).translate([x_floor + dx, 80, z])
+        assert (fat ^ a["Hanger"]).volume() > 0 and (fat ^ a["Chute"]).volume() > 0
+
+
+def test_spout_stays_inside_rim(result):
+    assert any(n.startswith("The spout reaches") for n in result.notes)
+
+
+def test_long_spout_warns(tmpl):
+    r = tmpl.build(tmpl.defaults() | {"bend_radius": 140, "exit_length": 120})
+    assert any("past the front of the rim" in n for n in r.notes)
 
 
 def test_short_board_distance_rejected(tmpl):

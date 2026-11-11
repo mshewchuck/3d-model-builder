@@ -145,7 +145,10 @@ def _shelf_pack(parts, order, bed, gap, margin):
                 break
         if spot is None:
             plates.append(dict(x=margin, y=margin, row_h=0.0))
-            xy = try_place(plates[-1], sx, sy) or (margin, margin)  # oversize parts still go somewhere
+            xy = try_place(plates[-1], sx, sy)
+            if xy is None:  # bigger than the bed: give it a plate of its own and close that plate
+                xy = (margin, margin)
+                plates[-1].update(y=bed)
             spot = (len(plates) - 1, xy)
         k, (x, y) = spot
         b = p.solid.bounding_box()

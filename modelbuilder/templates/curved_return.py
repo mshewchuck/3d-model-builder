@@ -4,9 +4,9 @@ Parts (all print with no supports):
 * Chute, in two identical halves: a U channel that bends (70 degrees by default, so the exit runs
   downhill) with a slotted floor, flat side panels with windows, and a rounded spout. Each half
   prints lying flat on its side panel. Ears along the back join the halves.
-* Hanger: caps the block where the rim joins the backboard, runs down the board, and ends in a
-  shelf with a plate that bolts to the back of the chute's top (2 M3 screws). Prints lying on
-  its backboard side.
+* Hanger: caps the block where the rim joins the backboard, runs down the board as a ladder
+  frame, and ends in two cheeks that clamp the outside of the chute's side panels (3 M3
+  screws each, loaded in shear). Prints lying on its backboard side.
 
 Frames: the chute is built lying on the bed (the "print frame") with the bend centred on the Z
 axis. It enters along -Y and leaves along -X. `_to_installed` maps it to the installed view:
@@ -30,17 +30,20 @@ EAR = 6.0  # how far the joining ears stick out behind the floor
 EAR_W = 12.0  # ear width along the chute
 EAR_HOLE_R = 1.7  # M3 screw or a small zip tie
 SCREW_R = 1.7  # M3
-SCREW_SPREAD = 36.0  # the two chute-to-hanger screws, side to side
 # Hanger: caps the block where the rim meets the backboard.
 CAP_FIT = 0.4  # clearance around the block
 CAP_T = 2.4  # cap wall thickness
 FINGER = 6.0  # size of the two front fingers that stop the cap sliding off the block
-LEG_W = 10.0  # leg / spine width
-LEG_T = 4.0  # leg thickness (lies flat against the backboard)
-SHELF_T = 4.0  # shelf from the board out to the chute
-SHELF_W = 46.0
-PLATE_H = 12.0  # plate that bolts to the back of the chute
-PLATE_T = 4.0
+LEG_W = 10.0  # leg width
+LEG_T = 4.0  # leg / frame thickness (lies flat against the backboard)
+BAR_W = 8.0  # cross bars tying the two legs into a ladder frame
+CHEEK_H = 24.0  # height of the cheeks where they clamp the chute
+CHEEK_UP = 30.0  # the cheeks rise this far up the frame at the backboard (a brace)
+CHEEK_T = 3.0
+CHEEK_REACH = 36.0  # how far the cheeks reach forward along the chute's side panels
+CHEEK_FIT = 0.3
+SIDE_SCREW_X = (8.0, 19.0, 30.0)  # side screws: distance in front of the chute floor
+SIDE_SCREW_DOWN = 12.0  # ...and below the top of the chute
 
 
 def _poly(points) -> CrossSection:
@@ -60,13 +63,13 @@ class CurvedReturnTemplate(Template):
     params = [
         Param("ball_diameter", "Ball diameter", 80, 40, 130,
               help="Default fits an 80 mm mini airless ball. Measure yours."),
-        Param("bend_radius", "Bend radius", 100, 50, 200,
+        Param("bend_radius", "Bend radius", 70, 50, 200,
               help="Radius of the chute's floor through the turn. Bigger turns more smoothly but is bigger to print."),
-        Param("bend_angle", "Bend angle", 70, 30, 90, unit="deg",
-              help="How far the chute turns from straight down. 70 means the exit slopes 20 degrees downhill toward you."),
-        Param("lead_in", "Straight section at top", 30, 26, 100,
+        Param("bend_angle", "Bend angle", 65, 30, 90, unit="deg",
+              help="How far the chute turns from straight down. 65 means the exit slopes 25 degrees downhill toward you."),
+        Param("lead_in", "Straight section at top", 40, 32, 100,
               help="Straight drop at the top of the chute. The hanger bolts to its upper part."),
-        Param("exit_length", "Spout length", 60, 0, 150,
+        Param("exit_length", "Spout length", 35, 0, 150,
               help="Straight run after the turn. The end of it is rounded off into the spout."),
         Param("wall", "Wall thickness", 2.0, 1.6, 5),
         Param("block_width", "Rim block width", 57.2, 20, 150,
@@ -77,6 +80,9 @@ class CurvedReturnTemplate(Template):
               help="Top to bottom (0.5 in = 12.7 mm)."),
         Param("board_to_center", "Backboard to rim centre", 110, 60, 300,
               help="Straight out from the backboard to the middle of the rim. The ball drops here."),
+        Param("rim_diameter", "Rim inside diameter", 150, 80, 400,
+              help="Across the inside of the rim. Used to check the spout doesn't stick out past "
+                   "the front of the rim."),
         Param("drop", "Block to chute drop", 170, 60, 400,
               help="From the bottom of the rim block down to the top of the chute. Make it longer "
                    "than the net so the ball falls out of the net first."),
@@ -153,7 +159,7 @@ class CurvedReturnTemplate(Template):
                           (rf + t - 0.3, zc)])  # 45 degree underside, so it prints unsupported
         r_hole = rf + t + EAR / 2 + 0.5
         ear_deg = math.degrees(EAR_W / (rf + t))
-        for frac in (0.2, 0.5, 0.8):
+        for frac in (0.1, 0.3, 0.5, 0.7, 0.9):
             a0 = angle * frac - ear_deg / 2
             ear = Manifold.revolve(ear_prof, 8, ear_deg).rotate([0, 0, a0])
             ac = math.radians(angle * frac)
@@ -167,16 +173,14 @@ class CurvedReturnTemplate(Template):
             h = h.translate([r_hole, zc - 15, 0])
             return place((e - h).translate([0, 0, w_c]))
 
-        half = half + straight_ear(along_lead, EAR_W / 2)  # low on the lead-in, below the hanger plate
+        # (No ear on the lead-in: the hanger's cheeks clamp both halves there.)
         if exit_len - rc >= EAR_W + 4:
             half = half + self._exit(straight_ear(lambda m: m, -(exit_len - rc) / 2), 0, angle)
 
-        # Screw hole through the floor near the top of the lead-in: the hanger's plate bolts to the
-        # back of the floor here (one M3 per half, 36 mm apart).
-        y_screw = -(lead_len - 6)
-        z_screw = zc - SCREW_SPREAD / 2
-        half = half - Manifold.cylinder(t + 4, SCREW_R, circular_segments=16).rotate([0, 90, 0]).translate(
-            [rf - 2, y_screw, z_screw])
+        # Screw holes through the side panel near the top, where the hanger's cheeks clamp it.
+        for dx in SIDE_SCREW_X:
+            half = half - Manifold.cylinder(t + 2, SCREW_R, circular_segments=16).translate(
+                [rf + t - dx, -(lead_len - SIDE_SCREW_DOWN), -1])
 
         full = half + half.mirror([0, 0, 1]).translate([0, 0, 2 * zc])
         geo = dict(t=t, rf=rf, zc=zc, w_in=w_in, depth=depth)
@@ -197,14 +201,13 @@ class CurvedReturnTemplate(Template):
         return m.transform([[-1, 0, 0, 0], [0, 0, -1, zc], [0, -1, 0, 0]])
 
     # ----------------------------------------------------------------- hanger
-    def _hanger(self, v, x_board, x_floor, z_top, screws):
+    def _hanger(self, v, x_board, x_floor, z_top, y_side):
         """One-piece hanger in the installed frame. Prints lying on its backboard side.
 
         x_floor is the back face of the chute floor and z_top the top of the chute.
         """
         bw, bd, bh = v["block_width"], v["block_depth"], v["block_height"]
         f, t = CAP_FIT, CAP_T
-        z_bracket = z_top - SHELF_T
         zb = z_top + v["drop"]  # bottom of the rim block
         top = zb + bh
         xo = x_board
@@ -220,43 +223,38 @@ class CurvedReturnTemplate(Template):
             fy0, fy1 = sorted((sgn * (bw / 2 - FINGER), sgn * (yo + t)))
             cap = cap + box(xo + bd + f, xo + bd + f + t, fy0, fy1, top - FINGER, top + f + t)
 
-        # Legs down past the block ends, joining into one spine (a flat profile on the board).
-        z_join = zb - 30
-        z_low = z_top + 30
-        legs = CrossSection()
+        # Ladder frame flat on the board: two straight legs from the end plates down to the
+        # cheeks, tied by cross bars. Drawn as a (y, z) profile and extruded LEG_T from the board.
+        z_cb = z_top - CHEEK_H  # bottom of the cheeks
+        z_up = z_top + CHEEK_UP  # top of the cheeks' brace at the board
+        yl = yo + LEG_W / 2  # leg centres, just outside the block ends
+        y_cheek = y_side + CHEEK_FIT + CHEEK_T / 2  # centre of each cheek
+        wide = 2 * (y_cheek + CHEEK_T / 2)
+        span = 2 * yl + LEG_W
+        frame = CrossSection()
         for sgn in (1, -1):
-            yl = sgn * (yo + t / 2 + LEG_W / 2 - t / 2)
-            legs = legs + CrossSection.batch_hull([
-                CrossSection.square([LEG_W, 1], center=True).translate([yl, zb + 0.4 * bh + 0.5]),
-                CrossSection.square([LEG_W, 1], center=True).translate([yl, zb - 6]),
-            ])
-            legs = legs + CrossSection.batch_hull([
-                CrossSection.circle(LEG_W / 2, 24).translate([yl, zb - 6]),
-                CrossSection.circle(LEG_W / 2, 24).translate([0, z_join]),
-            ])
-        legs = legs + CrossSection.square([LEG_W, z_join - z_low]).translate([-LEG_W / 2, z_low])
-        legs = legs + CrossSection.batch_hull([  # flare into the bracket
-            CrossSection.square([LEG_W, 1]).translate([-LEG_W / 2, z_low]),
-            CrossSection.square([SHELF_W, 1]).translate([-SHELF_W / 2, z_bracket]),
-        ])
-        # Profile (y, z) extruded along +X from the board: map local (u, w, e) -> (x = e, y = u, z = w).
-        spine = Manifold.extrude(legs, LEG_T).transform([[0, 0, 1, xo], [1, 0, 0, 0], [0, 1, 0, 0]])
+            frame = frame + CrossSection.square([LEG_W, zb + 0.4 * bh + 2 - z_cb]).translate(
+                [sgn * yl - LEG_W / 2, z_cb])
+            frame = frame + CrossSection.square([CHEEK_T + 4, z_up - z_cb]).translate(
+                [sgn * y_cheek - (CHEEK_T + 4) / 2, z_cb])  # upright under each cheek
+        for zbar, w in ((z_cb, wide), (z_up - BAR_W, wide), ((z_up + zb) / 2 - BAR_W / 2, span),
+                        (zb - BAR_W - 4, span)):
+            frame = frame + CrossSection.square([w, BAR_W]).translate([-w / 2, zbar])
+        # local (u, w, e) -> (x = xo + e, y = u, z = w)
+        spine = Manifold.extrude(frame, LEG_T).transform([[0, 0, 1, xo], [1, 0, 0, 0], [0, 1, 0, 0]])
 
-        # Shelf from the board out to the chute, ending in a plate that bolts to the back of the
-        # chute floor. Drawn as a side profile (x, z) and run across the width; the 45 degree
-        # chamfer under the plate keeps it printable lying on the board side.
-        xp = x_floor - PLATE_T
-        prof = _poly([(xo, z_top - SHELF_T), (xp - 8, z_top - SHELF_T), (xp, z_top - PLATE_H),
-                      (x_floor, z_top - PLATE_H), (x_floor, z_top), (xo, z_top)])
-        # local (x, z_profile, w) -> (X = x, Y = W/2 - w, Z = z_profile)
-        shelf = Manifold.extrude(prof, SHELF_W).transform(
-            [[1, 0, 0, 0], [0, 0, -1, SHELF_W / 2], [0, 1, 0, 0]])
-        for y, z in screws:
-            shelf = shelf - Manifold.cylinder(PLATE_T + 2, SCREW_R, circular_segments=16).rotate(
-                [0, 90, 0]).translate([xp - 1, y, z])
-            # Counterbore through the chamfer so the screw head seats on the back of the plate.
-            shelf = shelf - Manifold.cylinder(12, 3.1, circular_segments=20).rotate(
-                [0, 90, 0]).translate([xp - 12, y, z])
+        # Two cheeks run from the frame out along the outside of the chute's side panels and
+        # bolt to them with 3 screws each. They are vertical walls as printed (no supports).
+        cheek_prof = _poly([(xo, z_cb), (x_floor + CHEEK_REACH, z_cb), (x_floor + CHEEK_REACH, z_top),
+                            (xo + LEG_T, z_up), (xo, z_up)])
+        shelf = Manifold()
+        for sgn in (1, -1):
+            # local (x, z_profile, w) -> (X = x, Y = y + T/2 - w, Z = z_profile)
+            shelf = shelf + Manifold.extrude(cheek_prof, CHEEK_T).transform(
+                [[1, 0, 0, 0], [0, 0, -1, sgn * y_cheek + CHEEK_T / 2], [0, 1, 0, 0]])
+        for dx in SIDE_SCREW_X:
+            hole = Manifold.cylinder(2 * y_cheek + 10, SCREW_R, circular_segments=16).rotate([90, 0, 0])
+            shelf = shelf - hole.translate([x_floor + dx, y_cheek + 5, z_top - SIDE_SCREW_DOWN])
         return cap + spine + shelf
 
     # ------------------------------------------------------------------ build
@@ -269,10 +267,10 @@ class CurvedReturnTemplate(Template):
         x_floor = -(rf + t)  # back face of the chute floor
         x_catch = -rf + v["ball_diameter"] / 2 + CATCH_GAP  # where the ball drops (under the rim centre)
         x_board = x_catch - v["board_to_center"]
-        if x_floor - x_board < PLATE_T + 12:
+        if x_floor - x_board < 12:
             raise ValueError("Backboard to rim centre is too short: the chute would hit the backboard.")
-        screws = [(y, z_top - 6) for y in (SCREW_SPREAD / 2, -SCREW_SPREAD / 2)]
-        hanger = self._hanger(v, x_board, x_floor, z_top, screws)
+        y_side = geo["zc"]  # outer face of each side panel (installed |Y|)
+        hanger = self._hanger(v, x_board, x_floor, z_top, y_side)
 
         zb = z_top + v["drop"]
         blk = Manifold.cube([v["block_depth"], v["block_width"], v["block_height"]]).translate(
@@ -311,19 +309,30 @@ class CurvedReturnTemplate(Template):
                 notes.append(f"Warning: the {p.name.lower()} is {sx:.0f} x {sy:.0f} x {sz:.0f} mm, "
                              f"larger than your {bed:.0f} mm bed."
                              + (" Shorten the block-to-chute drop." if p.name == "Hanger" else ""))
+        tip = chute_inst.bounding_box()[3] - x_board
+        rim_front = v["board_to_center"] + v["rim_diameter"] / 2
+        if tip > rim_front:
+            notes.append(f"Warning: the spout reaches {tip:.0f} mm out from the backboard, "
+                         f"{tip - rim_front:.0f} mm past the front of the rim. Use a smaller bend "
+                         "radius, bend angle or spout length.")
+        else:
+            notes.append(f"The spout reaches {tip:.0f} mm out from the backboard, "
+                         f"{rim_front - tip:.0f} mm inside the front of the rim.")
         notes.append(
             "Bambu Studio: supports OFF. The chute is two identical halves, each lying flat on its "
             "side panel. The hanger lies on its backboard side. PETG or PLA."
         )
         notes.append(
-            "Joining the halves: put them together floor to floor. The 5 ears along the back pair "
+            "Joining the halves: put them together floor to floor. The 6 ears along the back pair "
             "up. Put an M3 x 20 mm screw and nut, or a small zip tie, through each pair."
         )
         notes.append(
             "Hanging: press the hanger's cap down over the block where the rim joins the "
-            "backboard. Its legs run down the board around the block ends. Bolt the top of the "
-            "chute to the hanger's plate with 2 M3 x 10 mm screws, head on the hanger side and nut "
-            "inside the chute, through the holes in the back of the floor. Measure the block, the board-to-rim-centre distance and your "
+            "backboard. Its two legs run down the board past the block ends. Bolt the top of the "
+            "chute between the hanger's two cheeks with 6 M3 x 8 mm screws and nuts (3 per side, "
+            "heads outside, nuts inside). The screws carry the chute's weight sideways (in shear), "
+            "which is far stronger than pulling straight out, and the cheeks hold the two halves "
+            "together at the top. Measure the block, the board-to-rim-centre distance and your "
             "net length first, because the cap is a snug 0.4 mm fit."
         )
         return BuildResult(assembled, print_parts, notes)

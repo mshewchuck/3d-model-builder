@@ -36,13 +36,21 @@ class Mesh:
     name: str
     vertices: np.ndarray  # (N, 3) float
     triangles: np.ndarray  # (M, 3) int, counter-clockwise when viewed from outside
+    color: str | None = None  # "#rrggbb" display colour, optional
 
 
 def _fmt(v: float) -> str:
     return f"{v:.4f}".rstrip("0").rstrip(".") or "0"
 
 
-def model_xml(meshes: list[Mesh], title: str = "Model") -> str:
+def model_xml(meshes: list[Mesh], title: str = "Model", group: str | None = None) -> str:
+    """Core 3MF model XML.
+
+    With `group`, the meshes become the parts of one object (a components object), so
+    slicers load them as a single object with one part per mesh, which is what you want for
+    multi-colour prints where each part gets its own filament.
+    """
+    q = {chr(34): "&quot;"}
     out = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<model unit="millimeter" xml:lang="en-US" '
@@ -51,8 +59,17 @@ def model_xml(meshes: list[Mesh], title: str = "Model") -> str:
         '  <metadata name="Application">3D Model Builder</metadata>',
         "  <resources>",
     ]
+    n = len(meshes)
+    colors = list(dict.fromkeys(m.color for m in meshes if m.color))
+    mat_id = n + 2
+    if colors:
+        out.append(f'    <basematerials id="{mat_id}">')
+        for c in colors:
+            out.append(f'      <base name="{escape(c)}" displaycolor="{escape(c.upper())}FF"/>')
+        out.append("    </basematerials>")
     for oid, mesh in enumerate(meshes, start=1):
-        out.append(f'    <object id="{oid}" type="model" name="{escape(mesh.name, {chr(34): "&quot;"})}">')
+        mat = f' pid="{mat_id}" pindex="{colors.index(mesh.color)}"' if mesh.color else ""
+        out.append(f'    <object id="{oid}" type="model" name="{escape(mesh.name, q)}"{mat}>')
         out.append("      <mesh>")
         out.append("        <vertices>")
         for x, y, z in np.asarray(mesh.vertices, dtype=float):
@@ -64,19 +81,26 @@ def model_xml(meshes: list[Mesh], title: str = "Model") -> str:
         out.append("        </triangles>")
         out.append("      </mesh>")
         out.append("    </object>")
+    if group:
+        out.append(f'    <object id="{n + 1}" type="model" name="{escape(group, q)}">')
+        out.append("      <components>")
+        for oid in range(1, n + 1):
+            out.append(f'        <component objectid="{oid}"/>')
+        out.append("      </components>")
+        out.append("    </object>")
     out.append("  </resources>")
     out.append("  <build>")
-    for oid in range(1, len(meshes) + 1):
+    for oid in ([n + 1] if group else range(1, n + 1)):
         out.append(f'    <item objectid="{oid}"/>')
     out.append("  </build>")
     out.append("</model>")
     return "\n".join(out) + "\n"
 
 
-def write_3mf(path: str, meshes: list[Mesh], title: str = "Model") -> None:
+def write_3mf(path: str, meshes: list[Mesh], title: str = "Model", group: str | None = None) -> None:
     if not meshes:
         raise ValueError("Nothing to export")
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", CONTENT_TYPES)
         z.writestr("_rels/.rels", RELS)
-        z.writestr("3D/3dmodel.model", model_xml(meshes, title))
+        z.writestr("3D/3dmodel.model", model_xml(meshes, title, group))

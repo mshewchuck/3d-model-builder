@@ -12,7 +12,6 @@ from . import __version__
 from .preview import draw_parts
 from .templates import TEMPLATES
 from .templates.base import BuildResult, Template
-from .threemf import write_3mf
 
 
 class App(ttk.Frame):
@@ -159,7 +158,7 @@ class App(ttk.Frame):
         )
         if not path:
             return
-        write_3mf(path, [p.to_mesh() for p in self.result.print_parts], title=self.template.name)
+        self.template.export(path, self.result)
         messagebox.showinfo("Exported", f"Saved {path}\n\nOpen it in Bambu Studio (File > Import).")
 
 

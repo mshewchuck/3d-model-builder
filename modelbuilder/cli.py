@@ -10,7 +10,6 @@ import argparse
 import sys
 
 from .templates import TEMPLATES
-from .threemf import write_3mf
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     result = t.build(values)
-    write_3mf(args.output, [p.to_mesh() for p in result.print_parts], title=t.name)
+    t.export(args.output, result)
     print(f"Wrote {args.output}")
     if args.preview:
         from .preview import save_preview_png

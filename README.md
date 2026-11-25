@@ -65,6 +65,24 @@ identical halves.
 - **Rim inside diameter:** used for the spout check.
 - **Block to chute drop:** this must be longer than the net.
 
+## Template: Serve Meters dial magnet
+
+This is a round fridge magnet in Serve colours (blue `#0054A5`, green `#72BF44`). It has a meter
+face with the Serve Meters logo, a gauge with a green arc, the logo's rising arrow as the
+needle, and the branch number (505 by default).
+
+- **One object, four parts:** the blue body and rim, the white face, the blue details and
+  the green details. In Bambu Studio, set each part to its filament and print face up with
+  supports off.
+- **Layers:** the white face is flush with the rim. The logo, gauge and number stand 0.4 mm
+  proud, and you can change that height.
+- **Magnet:** the default is one 12 × 3 mm disc in a pocket in the back, which opens on the
+  plate side. You can also choose 3 magnets. Press the magnet in and add a drop of CA glue.
+- **Size:** 80 mm by default. At that size the logo's thinnest strokes are at least 0.6 mm
+  wide, which a 0.4 mm nozzle prints cleanly.
+- **Logo:** traced from `modelbuilder/assets/serve_meters_logo.png`, without the ™, which
+  would be too small to print. A vector logo (SVG or PDF) would give even crisper edges.
+
 ## Template: Simple flat tray
 
 The lighter alternative is one flat tray: a thin floor with low side rails and a back stop.

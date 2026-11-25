@@ -31,7 +31,7 @@ class Part:
         m = self.solid.to_mesh()
         verts = np.asarray(m.vert_properties)[:, :3]
         tris = np.asarray(m.tri_verts)
-        return Mesh(self.name, verts, tris)
+        return Mesh(self.name, verts, tris, self.color)
 
     def size(self) -> tuple[float, float, float]:
         b = self.solid.bounding_box()
@@ -49,6 +49,14 @@ class Template:
     name: str = ""
     description: str = ""
     params: list[Param] = []
+    # True: export the print parts as the parts of ONE object (multi-colour prints).
+    single_object: bool = False
+
+    def export(self, path: str, result: "BuildResult") -> None:
+        from ..threemf import write_3mf
+
+        write_3mf(path, [p.to_mesh() for p in result.print_parts], title=self.name,
+                  group=self.name if self.single_object else None)
 
     def defaults(self) -> dict[str, float]:
         return {p.key: p.default for p in self.params}
